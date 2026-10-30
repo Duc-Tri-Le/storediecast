@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap');
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+@import "tailwindcss-safe-area";
+
+@theme {
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+  --text-4xl: 36px;
+  --text-4xl--line-height: 40px;
+  --font-sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+  --bg: #f7f5f2;
+  --surface: #ffffff;
+  --surface2: #efece8;
+  --text: #19171a;
+  --dim: #6f6a72;
+  --border: #e3ded8;
+  --accent: #c8102e;
+  --accent-ink: #ffffff;
+  --promo: #b45309;
+  --dark: #141416;
+  --radius: 14px;
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface2);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121214;
+    --surface: #1d1d20;
+    --surface2: #26262a;
+    --text: #f4f1ee;
+    --dim: #a49ea8;
+    --border: #333338;
+    --accent: #e8354f;
+    --promo: #f0a840;
+    --dark: #0c0c0e;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Responsive toàn dải kích thước: thân trang không bao giờ tràn ngang
+   ở bất kỳ cỡ màn hình nào (điện thoại 390px → màn hình lớn). Dùng
+   `clip` thay cho `hidden` để không tạo vùng cuộn mới và không phá
+   `position: sticky` của header / cột lọc. */
+html,
+body {
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* Ảnh không bao giờ vượt khung chứa của chúng. */
+img {
+  max-width: 100%;
+}
+
+/* Mọi phần tử bấm được (chuyển trang, thêm giỏ, lọc, chọn sản phẩm…)
+   đều hiện con trỏ ngón tay khi di chuột qua. */
+button:not(:disabled),
+a,
+select,
+summary,
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]),
+input[type="checkbox"],
+input[type="radio"],
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }

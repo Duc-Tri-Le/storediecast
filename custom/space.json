@@ -1,0 +1,8 @@
+{
+  "runtime": "typescript",
+  "platformVersion": 25,
+  "entry": "client/dist/index.html",
+  "name": "XE ĐỎ — Web Bán Hàng Mô Hình Xe",
+  "slug": "web-b-n-h-ng-cho-kh-ch",
+  "managedCronJobs": []
+}

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.bun-cache/
+
+# Build output
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Database (giữ schema, bỏ file db thực tế nếu cần)
+# data/decast.db
+
+# Gemini / Agent config
+.agents/
+GEMINI.md
+AGENTS.md
+admin/AGENTS.md
+custom/AGENTS.md
+

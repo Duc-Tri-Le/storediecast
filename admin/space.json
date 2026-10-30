@@ -1,0 +1,8 @@
+{
+  "runtime": "typescript",
+  "platformVersion": 25,
+  "entry": "client/dist/index.html",
+  "name": "Web Quản Trị Bán Xe Mô Hình",
+  "slug": "web-qu-n-tr-b-n-xe-m-h-nh",
+  "managedCronJobs": []
+}
