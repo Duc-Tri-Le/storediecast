@@ -2,16 +2,12 @@ import { useState, useRef } from "react";
 import type { CatalogData } from "../types";
 import type {
   CollectionCondition,
-  ConditionKind,
-  ConditionOperator,
   MatchMode,
 } from "../utils/collectionRules";
-import {
-  CONDITION_KIND_LABELS,
-  CONDITION_OPERATOR_LABELS_EN,
-} from "../utils/collectionRules";
 import { directImageSrc } from "../utils/format";
-import { Icon, cardCls, labelCls, inputCls, smallBtn } from "./shared";
+import { slugify } from "../utils/slug";
+import { Icon, cardCls, labelCls, inputCls } from "./shared";
+import { ConditionsBuilder } from "./ConditionsEditor";
 
 export function CollectionConditionsSection({
   conditions,
@@ -32,133 +28,31 @@ export function CollectionConditionsSection({
   catalog: CatalogData | null;
   allTags: string[];
 }) {
-  const selectCls =
-    "rounded-lg border border-[var(--border)] bg-white px-2 py-2 text-sm outline-none focus:border-[var(--accent)]";
-
-  const conditionOptions = (kind: ConditionKind): string[] => {
-    if (kind === "tag") return allTags;
-    if (!catalog) return [];
-    if (kind === "scale") return catalog.scales.map((e) => e.name);
-    if (kind === "brand") return catalog.carBrands.map((e) => e.name);
-    if (kind === "vehicleType") return catalog.vehicleTypes.map((e) => e.name);
-    return catalog.modelMakers.map((e) => e.name);
-  };
-
   return (
-    <section className={cardCls} aria-label="Điều kiện của bộ sưu tập">
-      <h2 className="text-base font-bold">Điều kiện</h2>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        <span>Sản phẩm phải khớp:</span>
-        <label className="flex items-center gap-1.5">
-          <input
-            type="radio"
-            name="cd-match"
-            checked={matchMode === "all"}
-            onChange={() => onChangeMatchMode("all")}
-          />
-          tất cả điều kiện
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input
-            type="radio"
-            name="cd-match"
-            checked={matchMode === "any"}
-            onChange={() => onChangeMatchMode("any")}
-          />
-          bất kỳ điều kiện nào
-        </label>
+    <section className={`${cardCls} p-5 sm:p-6 space-y-4`} aria-label="Điều kiện của bộ sưu tập">
+      <div className="border-b border-[var(--border)] pb-3">
+        <h2 className="text-sm font-bold text-[var(--text)]">Điều kiện tự động gom sản phẩm</h2>
+        <p className="mt-0.5 text-xs text-[var(--dim)]">
+          Các mẫu xe mô hình thỏa mãn điều kiện bên dưới sẽ tự động được đưa vào bộ sưu tập này.
+        </p>
       </div>
-      <div className="mt-3 space-y-2">
-        {conditions.map((c, i) => (
-          <div key={i} className="flex flex-wrap gap-2">
-            <label className="sr-only" htmlFor={`cd-cond-field-${i}`}>
-              Trường điều kiện {i + 1}
-            </label>
-            <select
-              id={`cd-cond-field-${i}`}
-              aria-label={`Trường điều kiện ${i + 1}`}
-              className={`${selectCls} w-36 shrink-0`}
-              value={c.kind}
-              onChange={(e) =>
-                onChangeCondition(i, {
-                  kind: e.target.value as ConditionKind,
-                  value: "",
-                })
-              }
-            >
-              {(Object.keys(CONDITION_KIND_LABELS) as ConditionKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {CONDITION_KIND_LABELS[k]}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor={`cd-cond-op-${i}`}>
-              Toán tử điều kiện {i + 1}
-            </label>
-            <select
-              id={`cd-cond-op-${i}`}
-              aria-label={`Toán tử điều kiện ${i + 1}`}
-              className={`${selectCls} w-36 shrink-0`}
-              value={c.operator}
-              onChange={(e) =>
-                onChangeCondition(i, {
-                  operator: e.target.value as ConditionOperator,
-                })
-              }
-            >
-              {(
-                Object.keys(CONDITION_OPERATOR_LABELS_EN) as ConditionOperator[]
-              ).map((o) => (
-                <option key={o} value={o}>
-                  {CONDITION_OPERATOR_LABELS_EN[o]}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor={`cd-cond-value-${i}`}>
-              Giá trị điều kiện {i + 1}
-            </label>
-            <select
-              id={`cd-cond-value-${i}`}
-              aria-label={`Giá trị điều kiện ${i + 1}`}
-              className={`${selectCls} min-w-40 flex-1`}
-              value={c.value}
-              onChange={(e) => onChangeCondition(i, { value: e.target.value })}
-            >
-              <option value="">
-                — Chọn {CONDITION_KIND_LABELS[c.kind].toLowerCase()} —
-              </option>
-              {conditionOptions(c.kind).map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-              {c.value && !conditionOptions(c.kind).includes(c.value) && (
-                <option value={c.value}>{c.value}</option>
-              )}
-            </select>
-            <button
-              type="button"
-              aria-label={`Xóa điều kiện ${i + 1}`}
-              disabled={conditions.length <= 1}
-              onClick={() => onRemoveCondition(i)}
-              className="shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-sm text-[#9c2b2b] disabled:opacity-40"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+
+      <ConditionsBuilder
+        conditions={conditions}
+        matchMode={matchMode}
+        onChangeMatchMode={onChangeMatchMode}
+        onChangeCondition={onChangeCondition}
+        onAddCondition={onAddCondition}
+        onRemoveCondition={onRemoveCondition}
+        catalog={catalog}
+        allTags={allTags}
+        showMatchMode={true}
+        addLabel="Thêm điều kiện khác"
+      />
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--sidebar)]/40 p-3 sm:p-3.5 text-xs text-[var(--dim)] leading-relaxed">
+        💡 <strong>Mẹo chọn giá trị:</strong> Giá trị của Loại xe, Hãng xe, Hãng mô hình và Tỉ lệ lấy đúng từ Quản lý danh mục; giá trị Thẻ lấy từ các từ khóa đang có trên xe mô hình.
       </div>
-      <button
-        type="button"
-        onClick={onAddCondition}
-        className={`${smallBtn} mt-3`}
-      >
-        Thêm điều kiện khác
-      </button>
-      <p className="mt-2 text-xs text-[var(--dim)]">
-        Giá trị của Loại xe, Hãng xe, Hãng mô hình và Tỉ lệ lấy đúng từ Quản lý danh
-        mục; giá trị Thẻ lấy từ thẻ thật đang có trên sản phẩm.
-      </p>
     </section>
   );
 }
@@ -168,72 +62,138 @@ export function CollectionSeoSection({
   description,
   seoTitle,
   seoDescription,
+  slug,
   seoOpen,
   onToggleSeo,
   onChangeSeoTitle,
   onChangeSeoDesc,
+  onChangeSlug,
 }: {
   title: string;
   description: string;
   seoTitle: string;
   seoDescription: string;
+  slug: string;
   seoOpen: boolean;
   onToggleSeo: () => void;
   onChangeSeoTitle: (v: string) => void;
   onChangeSeoDesc: (v: string) => void;
+  onChangeSlug: (v: string) => void;
 }) {
+  const effectiveTitle = (seoTitle.trim() || title.trim() || "Tiêu đề bộ sưu tập") + " — XE ĐỎ Mô Hình";
+  const effectiveSlug = slug.trim() || slugify(title.trim()) || "bo-suu-tap";
+  const effectiveDesc =
+    seoDescription.trim() ||
+    description.trim() ||
+    "Khám phá bộ sưu tập mô hình xe độc đáo, chất lượng cao tại XE ĐỎ. Giao hàng toàn quốc, cam kết chính hãng.";
+  const collectionLiveUrl = `http://localhost:3000/collections/${effectiveSlug}`;
+
   return (
-    <section className={cardCls} aria-label="Xem trước hiển thị trên công cụ tìm kiếm">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold">Xem trước hiển thị trên công cụ tìm kiếm</h2>
+    <section className={`${cardCls} p-5 sm:p-6 space-y-4`} aria-label="Xem trước hiển thị trên công cụ tìm kiếm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3.5">
+        <div>
+          <h2 className="text-sm font-bold text-[var(--text)]">Tối ưu hóa công cụ tìm kiếm (SEO)</h2>
+          <p className="mt-0.5 text-xs text-[var(--dim)]">
+            Xem trước và tinh chỉnh tiêu đề, mô tả và đường dẫn truy cập bộ sưu tập trên web khách.
+          </p>
+        </div>
         <button
           type="button"
           aria-expanded={seoOpen}
           onClick={onToggleSeo}
-          className="text-sm font-medium text-[var(--accent)]"
+          className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--sidebar)] transition shadow-2xs"
         >
-          Sửa SEO
+          {seoOpen ? "Thu gọn" : "Chỉnh sửa SEO"}
         </button>
       </div>
-      <div className="mt-3 rounded-lg border border-[var(--border)] px-4 py-3">
-        <p className="text-base text-[#1558b0]">{seoTitle.trim() || title}</p>
-        <p className="text-xs text-[#3d7a44]">
-          Web bán hàng › Bộ sưu tập ›{" "}
-          {(title || "bo-suu-tap").toLowerCase().replace(/\s+/g, "-")}
+
+      {/* Google Snippet Preview */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--table-head)]/40 p-4 sm:p-5 text-left space-y-1">
+        <a
+          href={collectionLiveUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="truncate text-base font-semibold text-[#1558b0] hover:underline block"
+          title="Bấm để mở thử trên web khách"
+        >
+          {effectiveTitle}
+        </a>
+        <p className="truncate text-xs text-[#3d7a44] font-medium flex items-center gap-1.5">
+          <span>{collectionLiveUrl}</span>
+          <span className="text-[10px] text-[var(--dim)] font-normal">↗ Web khách</span>
         </p>
-        <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">
-          {seoDescription.trim() ||
-            description.trim() ||
-            "Thêm tiêu đề và mô tả để xem bộ sưu tập này có thể hiện thế nào trong kết quả tìm kiếm."}
+        <p className="pt-0.5 line-clamp-2 text-xs text-[var(--dim)] leading-relaxed">
+          {effectiveDesc}
         </p>
       </div>
+
       {seoOpen && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="space-y-4 pt-4 border-t border-[var(--border)]">
           <div>
-            <label className={labelCls} htmlFor="cd-seo-title">
-              Tiêu đề SEO
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls} htmlFor="cd-seo-title">
+                Tiêu đề trang (SEO Title)
+              </label>
+              <span className="text-[11px] text-[var(--dim)] font-mono">
+                {(seoTitle || title).length}/70 ký tự khuyến nghị
+              </span>
+            </div>
             <input
               id="cd-seo-title"
-              className={inputCls}
+              className={`${inputCls} text-xs py-2`}
               value={seoTitle}
-              maxLength={200}
+              maxLength={160}
               onChange={(e) => onChangeSeoTitle(e.target.value)}
-              placeholder={title}
+              placeholder={title || "Tiêu đề bộ sưu tập xuất hiện trên Google"}
             />
+            <p className="mt-1 text-[11px] text-[var(--dim)]">
+              Để trống sẽ tự động lấy theo Tên bộ sưu tập phía trên.
+            </p>
           </div>
+
           <div>
-            <label className={labelCls} htmlFor="cd-seo-desc">
-              Mô tả SEO
-            </label>
-            <input
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls} htmlFor="cd-seo-desc">
+                Mô tả meta (SEO Description)
+              </label>
+              <span className="text-[11px] text-[var(--dim)] font-mono">
+                {(seoDescription || description).length}/160 ký tự khuyến nghị
+              </span>
+            </div>
+            <textarea
               id="cd-seo-desc"
-              className={inputCls}
+              rows={3}
+              className={`${inputCls} text-xs py-2 leading-relaxed`}
               value={seoDescription}
-              maxLength={1000}
+              maxLength={320}
               onChange={(e) => onChangeSeoDesc(e.target.value)}
-              placeholder="Để trống thì dùng mô tả của bộ"
+              placeholder="Mô tả ngắn gọn thu hút người dùng nhấp vào link trên Google..."
             />
+            <p className="mt-1 text-[11px] text-[var(--dim)]">
+              Để trống sẽ tự động trích dẫn từ Mô tả chi tiết của bộ sưu tập.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="cd-seo-slug">
+              Đường dẫn URL và tên xử lý (Handle / Slug) <span className="text-[#c0392b]">*</span>
+            </label>
+            <div className="mt-1 flex items-center rounded-lg border border-[var(--border)] bg-white overflow-hidden focus-within:border-[var(--accent)]">
+              <span className="shrink-0 bg-[var(--sidebar)] px-3 py-2 text-xs font-mono text-[var(--dim)] border-r border-[var(--border)]">
+                http://localhost:3000/collections/
+              </span>
+              <input
+                id="cd-seo-slug"
+                type="text"
+                className="w-full bg-transparent px-3 py-2 text-xs font-mono text-[var(--text)] outline-none"
+                value={slug}
+                onChange={(e) => onChangeSlug(slugify(e.target.value))}
+                placeholder={slugify(title) || "ten-bo-suu-tap"}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-[var(--dim)]">
+              Đường dẫn chính thức của bộ sưu tập này trên Web Bán Hàng cho khách (chỉ dùng chữ thường không dấu và gạch nối).
+            </p>
           </div>
         </div>
       )}
@@ -260,8 +220,14 @@ export function CollectionImageSection({
   const imageFileRef = useRef<HTMLInputElement>(null);
 
   return (
-    <section className={cardCls} aria-label="Ảnh bộ sưu tập">
-      <h2 className="text-base font-bold">Ảnh bộ sưu tập</h2>
+    <section className={`${cardCls} p-5 sm:p-6 space-y-4`} aria-label="Ảnh bộ sưu tập">
+      <div className="border-b border-[var(--border)] pb-3">
+        <h2 className="text-sm font-bold text-[var(--text)]">Ảnh bìa bộ sưu tập</h2>
+        <p className="mt-0.5 text-xs text-[var(--dim)]">
+          Ảnh đại diện hiển thị trên banner trang chi tiết và danh mục bộ sưu tập.
+        </p>
+      </div>
+
       <div
         role="button"
         tabIndex={0}
@@ -283,27 +249,27 @@ export function CollectionImageSection({
           setDragOver(false);
           void onImageFile(e.dataTransfer.files?.[0]);
         }}
-        className={`mt-3 cursor-pointer rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors ${
+        className={`cursor-pointer rounded-xl border-2 border-dashed p-6 sm:p-8 text-center transition-colors ${
           dragOver
             ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-            : "border-[var(--border)] hover:border-[var(--accent)]"
+            : "border-[var(--border)] hover:border-[var(--accent)] bg-[var(--table-head)]/20"
         }`}
       >
         {directImageSrc(imageKey) ? (
           <img
             src={directImageSrc(imageKey) ?? undefined}
             alt={`Ảnh bộ sưu tập ${title}`}
-            className="mx-auto max-h-44 rounded-lg object-cover"
+            className="mx-auto max-h-48 rounded-lg object-cover shadow-sm"
           />
         ) : (
-          <>
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold">
-              <Icon d="M12 16V5 M7.5 9 12 4.5 16.5 9 M4 20h16" size={15} /> Tải lên
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-xs font-semibold shadow-2xs">
+              <Icon d="M12 16V5 M7.5 9 12 4.5 16.5 9 M4 20h16" size={15} /> Tải ảnh lên
             </span>
-            <p className="mt-2 text-sm text-[var(--dim)]">
-              Kéo thả ảnh vào đây hoặc bấm để tải ảnh lên từ máy
+            <p className="text-xs text-[var(--dim)] leading-relaxed">
+              Kéo thả file ảnh vào đây hoặc bấm để chọn từ máy tính
             </p>
-          </>
+          </div>
         )}
       </div>
       <input
@@ -319,10 +285,10 @@ export function CollectionImageSection({
         }}
       />
       {imageName && (
-        <p className="mt-2 text-xs text-[var(--dim)]">Đã chọn: {imageName}</p>
+        <p className="text-xs text-[var(--dim)] font-mono">Đã chọn: {imageName}</p>
       )}
       {imageError && (
-        <p className="mt-2 rounded-lg bg-[#fbe3e3] px-3 py-2 text-sm text-[#9c2b2b]">
+        <p className="rounded-xl bg-[#fbe3e3] p-3 text-xs text-[#9c2b2b] font-medium">
           {imageError}
         </p>
       )}
@@ -330,15 +296,14 @@ export function CollectionImageSection({
         <button
           type="button"
           onClick={onRemoveImage}
-          className="mt-2 rounded-lg border border-[#e3b3b3] px-3 py-1.5 text-sm text-[#9c2b2b]"
+          className="rounded-lg border border-[#e3b3b3] bg-white px-3 py-1.5 text-xs font-semibold text-[#9c2b2b] hover:bg-[#fbe3e3] transition"
         >
-          Bỏ ảnh
+          Bỏ ảnh này
         </button>
       )}
-      <p className="mt-2 text-xs text-[var(--dim)]">
-        Ảnh được nén và lưu vào database chung khi bấm Lưu — web bán hàng đọc cùng
-        database nên dùng được ảnh này.
-      </p>
+      <div className="rounded-lg bg-[var(--sidebar)]/50 p-3 text-[11px] text-[var(--dim)] leading-relaxed">
+        ℹ️ Ảnh được nén và lưu đồng bộ vào database chung — hiển thị tự động trên Web Bán Hàng cho khách.
+      </div>
     </section>
   );
 }

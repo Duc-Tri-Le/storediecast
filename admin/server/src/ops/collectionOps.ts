@@ -1,9 +1,11 @@
+import { slugify } from "../slug";
 import { Database } from "bun:sqlite";
 import { type Row, iso, nullableStr, num, str } from "./dbCommon";
 import { ensureCollectionTables } from "./catalogInit";
 import {
   type CollectionCondition,
   type CollectionDetailInput,
+  checkDuplicateCollectionConditions,
   checkProductIds,
   parseConditions,
   parseThumbnailConfig,
@@ -12,6 +14,8 @@ import {
   validCollectionImageKey,
   validCollectionStatus,
 } from "./collectionHelpers";
+
+export { checkDuplicateCollectionConditions } from "./collectionHelpers";
 
 export function listCollections(db: Database): Row[] {
   ensureCollectionTables(db);
@@ -43,6 +47,7 @@ export function listCollections(db: Database): Row[] {
     thumbnailConfig: parseThumbnailConfig(c.thumbnail_config),
     seoTitle: str(c.seo_title ?? ""),
     seoDescription: str(c.seo_description ?? ""),
+    slug: str(c.slug ?? "") || slugify(str(c.title)),
     baseScale: nullableStr(c.base_scale),
     productIds: byCol.get(num(c.id)) ?? [],
     createdAt: iso(c.created_at),
@@ -57,6 +62,7 @@ export function createCollection(
     kind: string;
     conditions: unknown;
     productIds: unknown;
+    force?: boolean;
   } & CollectionDetailInput,
 ): Row {
   ensureCollectionTables(db);
@@ -83,6 +89,18 @@ export function createCollection(
         collectionId: null,
       };
     }
+    if (conditions.length > 0 && !input.force) {
+      const dup = checkDuplicateCollectionConditions(db, conditions);
+      if (dup) {
+        return {
+          ok: false,
+          duplicateWarning: true,
+          duplicateTitle: dup.duplicateTitle,
+          error: `${dup.message} Bạn có muốn tiếp tục lưu bộ sưu tập này không?`,
+          collectionId: null,
+        };
+      }
+    }
   }
   const imageKey = (input.imageKey ?? "").trim();
   if (!validCollectionImageKey(imageKey)) {
@@ -90,10 +108,11 @@ export function createCollection(
   }
   const checked = checkProductIds(db, kind === "manual" ? input.productIds : []);
   if ("error" in checked) return { ok: false, error: checked.error, collectionId: null };
+  const slug = (input.slug && input.slug.trim()) ? slugify(input.slug) : slugify(title);
   const ins = db
     .query(
-      `INSERT INTO collections (title, status, kind, conditions, description, match_mode, visible_on_list, image_key, thumbnail_config, seo_title, seo_description, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO collections (title, status, kind, conditions, description, match_mode, visible_on_list, image_key, thumbnail_config, seo_title, seo_description, created_at, slug)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     )
     .get(
       title,
@@ -108,6 +127,7 @@ export function createCollection(
       (input.seoTitle ?? "").trim(),
       (input.seoDescription ?? "").trim(),
       Date.now(),
+      slug,
     ) as Row | null;
   if (!ins) return { ok: false, error: "Không tạo được bộ sưu tập.", collectionId: null };
   const cid = num(ins.id);
@@ -127,8 +147,15 @@ export function updateCollection(
     status: string;
     conditions?: unknown;
     kind?: string;
+    force?: boolean;
   } & CollectionDetailInput,
-): { ok: boolean; error: string | null } {
+): {
+  ok: boolean;
+  error: string | null;
+  duplicateWarning?: boolean;
+  duplicateTitle?: string;
+  scale?: string;
+} {
   ensureCollectionTables(db);
   const existing = db
     .query("SELECT id, kind, base_scale, conditions FROM collections WHERE id = ?")
@@ -167,10 +194,13 @@ export function updateCollection(
             "SELECT id, title FROM collections WHERE base_scale = ? AND id != ?",
           )
           .get(c.value, input.id) as Row | null;
-        if (dup) {
+        if (dup && !input.force) {
           return {
             ok: false,
-            error: `Không lưu được: tỉ lệ ${c.value} đã có bộ sưu tập theo tỉ lệ riêng là “${str(dup.title)}”. Đổi bộ này sang tỉ lệ ${c.value} sẽ trùng với bộ đó — hãy chọn một tỉ lệ chưa có bộ theo tỉ lệ, hoặc sửa trực tiếp bộ “${str(dup.title)}”.`,
+            duplicateWarning: true,
+            duplicateTitle: str(dup.title),
+            scale: c.value,
+            error: `Tỉ lệ ${c.value} đã có bộ sưu tập theo tỉ lệ riêng là “${str(dup.title)}”. Đổi bộ này sang tỉ lệ ${c.value} sẽ trùng với bộ đó — bạn có chắc chắn muốn tiếp tục lưu không?`,
           };
         }
       }
@@ -216,6 +246,10 @@ export function updateCollection(
   if (input.seoDescription !== undefined) {
     sets.push("seo_description = ?");
     vals.push(input.seoDescription.trim());
+  }
+  if (input.slug !== undefined) {
+    sets.push("slug = ?");
+    vals.push(slugify(input.slug.trim() || title));
   }
   db.query(`UPDATE collections SET ${sets.join(", ")} WHERE id = ?`).run(
     ...vals,
@@ -286,4 +320,3 @@ export function deleteCollectionsBulk(db: Database, rawIds: unknown): Row {
   }
   return { ok: true, error: null, deleted, deletedProducts: 0 };
 }
-

@@ -21,6 +21,7 @@ export type CollectionFormShape = {
   imageKey: string;
   seoTitle: string;
   seoDescription: string;
+  slug: string;
 };
 
 export function shapeOfCollectionForm(s: CollectionFormShape): string {
@@ -41,6 +42,7 @@ export function shapeOfCollectionForm(s: CollectionFormShape): string {
     imageKey: s.imageKey,
     seoTitle: s.seoTitle,
     seoDescription: s.seoDescription,
+    slug: s.slug,
   });
 }
 

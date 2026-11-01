@@ -4,7 +4,7 @@ import { downloadCsvTemplate } from "../utils/productCsv";
 
 export function ProductCsvImportModal({
   importFileName,
-  importText,
+  hasData,
   importPlan,
   importOverwrite,
   setImportOverwrite,
@@ -14,7 +14,7 @@ export function ProductCsvImportModal({
   isPending,
 }: {
   importFileName: string;
-  importText: string | null;
+  hasData: boolean;
   importPlan: ImportPlan | null;
   importOverwrite: boolean;
   setImportOverwrite: (v: boolean) => void;
@@ -51,7 +51,7 @@ export function ProductCsvImportModal({
             onClick={onPickFile}
             className="rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-3.5 py-2 text-sm font-semibold text-white"
           >
-            Chọn file
+            Chọn file CSV
           </button>
           <span className="text-sm text-[var(--dim)]">
             {importFileName || "Chưa chọn file nào"}
@@ -122,7 +122,7 @@ export function ProductCsvImportModal({
           </span>
         </label>
 
-        {importText != null && importPlan && (
+        {hasData && importPlan && (
           <div className="mt-4 border-t border-[var(--border)] pt-3">
             <p className="text-sm">
               Sẽ nhập <strong>{importPlan.items.length}</strong> sản phẩm (

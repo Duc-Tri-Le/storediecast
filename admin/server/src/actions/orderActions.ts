@@ -1,9 +1,22 @@
 import { defineAction, z } from "../space";
 import { privileged } from "../privileged";
-import { adminOrderOut, okErrorOut } from "../schemas/productSchemas";
+import { adminOrderOut, adminOrdersPaginatedOut, okErrorOut } from "../schemas/productSchemas";
 import { callShop } from "../schemas/analyticsSchemas";
 
 export const orderActions = {
+  adminListOrdersPaginated: defineAction({
+    request: z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(200).default(50),
+      tab: z.enum(["all", "open", "hold", "closed"]).default("all"),
+      search: z.string().default(""),
+    }),
+    response: adminOrdersPaginatedOut,
+    privileged: [privileged.shopDb],
+    async handler(ctx, args) {
+      return callShop(ctx, "listOrdersPaginated", args);
+    },
+  }),
   adminListOrders: defineAction({
     request: z.object({}),
     response: z.object({ orders: z.array(adminOrderOut) }),

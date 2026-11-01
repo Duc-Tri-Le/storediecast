@@ -4,10 +4,10 @@ import { ensureCatalog, vehicleTypeOf } from "./catalogInit";
 import {
   ANALYTICS_RANGES,
   DAY_MS,
-  vnDateParts,
   vnDayStart,
-  vnKeyDate,
-  vnLabelDate,
+  buildAnalyticsBuckets,
+  aggregateDiscounts,
+  aggregateCustomers,
 } from "./analyticsHelpers";
 
 export function analytics(db: Database, rangeRaw: string): Row {
@@ -62,65 +62,13 @@ export function analytics(db: Database, rangeRaw: string): Row {
     0,
   );
 
-  type Bucket = { key: string; label: string; revenue: number; orders: number };
-  const buckets: Bucket[] = [];
-  let bucketIndexOf: (ts: number) => number = () => -1;
-  if (granularity === "hour" && start != null) {
-    for (let h = 0; h < 24; h++) {
-      buckets.push({
-        key: `${vnKeyDate(start)}-${h}`,
-        label: `${h}h`,
-        revenue: 0,
-        orders: 0,
-      });
-    }
-    const s = start;
-    bucketIndexOf = (ts) => Math.floor((ts - s) / 3600000);
-  } else if (granularity === "day" && start != null) {
-    const days = range === "7d" ? 7 : 30;
-    for (let i = 0; i < days; i++) {
-      const ds = start + i * DAY_MS;
-      buckets.push({ key: vnKeyDate(ds), label: vnLabelDate(ds), revenue: 0, orders: 0 });
-    }
-    const s = start;
-    bucketIndexOf = (ts) => Math.floor((vnDayStart(ts) - s) / DAY_MS);
-  } else if (granularity === "week" && start != null) {
-    const count = Math.ceil(90 / 7);
-    for (let i = 0; i < count; i++) {
-      const bs = start + i * 7 * DAY_MS;
-      const be = Math.min(bs + 6 * DAY_MS, todayStart);
-      buckets.push({
-        key: vnKeyDate(bs),
-        label: `${vnLabelDate(bs)} – ${vnLabelDate(be)}`,
-        revenue: 0,
-        orders: 0,
-      });
-    }
-    const s = start;
-    bucketIndexOf = (ts) => Math.floor((ts - s) / (7 * DAY_MS));
-  } else {
-    if (nonCancelled.length > 0) {
-      const earliest = Math.min(...nonCancelled.map((o) => num(o.created_at)));
-      const p0 = vnDateParts(vnDayStart(earliest));
-      const p1 = vnDateParts(todayStart);
-      const count = (p1.y - p0.y) * 12 + (p1.m - p0.m) + 1;
-      for (let i = 0; i < count; i++) {
-        const totalMonths = p0.y * 12 + p0.m + i;
-        const y = Math.floor(totalMonths / 12);
-        const m = totalMonths % 12;
-        buckets.push({
-          key: `${y}-${String(m + 1).padStart(2, "0")}`,
-          label: `Tháng ${m + 1}/${y}`,
-          revenue: 0,
-          orders: 0,
-        });
-      }
-      bucketIndexOf = (ts) => {
-        const p = vnDateParts(vnDayStart(ts));
-        return (p.y - p0.y) * 12 + (p.m - p0.m);
-      };
-    }
-  }
+  const { buckets, bucketIndexOf } = buildAnalyticsBuckets(
+    range,
+    start,
+    granularity,
+    todayStart,
+    nonCancelled,
+  );
 
   for (const o of nonCancelled) {
     const idx = bucketIndexOf(num(o.created_at));
@@ -179,65 +127,48 @@ export function analytics(db: Database, rangeRaw: string): Row {
       a.variants.set(color, va);
     }
   }
-  const toProductEntry = (a: ProductAgg): Row => {
+
+  const topAll = [...aggMap.values()].map((a) => {
     const p = prodMap.get(a.productId);
-    let best: VariantAgg | null = null;
-    for (const v of a.variants.values()) {
-      if (!best || v.qty > best.qty || (v.qty === best.qty && v.revenue > best.revenue)) {
-        best = v;
-      }
-    }
     return {
       productId: a.productId,
-      productName: p ? str(p.name) : a.snapshotName,
-      scale: p ? str(p.scale) : a.snapshotScale,
+      name: p ? str(p.name) : a.snapshotName,
       brand: p ? str(p.brand) : "",
+      scale: p ? str(p.scale) : a.snapshotScale,
       vehicleType: vehicleTypeFor(a.productId),
-      qty: a.qty,
+      quantity: a.qty,
       revenue: a.revenue,
-      productExists: p != null,
-      bestVariant: best
-        ? { colorName: best.colorName, qty: best.qty, revenue: best.revenue }
-        : null,
+      variants: [...a.variants.values()]
+        .sort((x, y) => y.qty - x.qty || y.revenue - x.revenue)
+        .slice(0, 5),
     };
-  };
-  const aggList = [...aggMap.values()];
-  const topByQty = [...aggList]
-    .sort((x, y) => y.qty - x.qty || y.revenue - x.revenue)
-    .slice(0, 10)
-    .map(toProductEntry);
-  const topByRevenue = [...aggList]
-    .sort((x, y) => y.revenue - x.revenue || y.qty - x.qty)
-    .slice(0, 10)
-    .map(toProductEntry);
+  });
 
-  const breakdown = (keyOf: (it: Row) => string): Row[] => {
-    const m = new Map<
-      string,
-      { name: string; qty: number; revenue: number; orders: Set<number> }
-    >();
-    let totalRev = 0;
+  const topByQty = [...topAll]
+    .sort((x, y) => y.quantity - x.quantity || y.revenue - x.revenue)
+    .slice(0, 10);
+  const topByRevenue = [...topAll]
+    .sort((x, y) => y.revenue - x.revenue || y.quantity - x.quantity)
+    .slice(0, 10);
+
+  const breakdown = (keyOf: (it: Row) => string) => {
+    const map = new Map<string, { key: string; revenue: number; quantity: number }>();
     for (const o of paid) {
       for (const it of itemsByOrder.get(num(o.id)) ?? []) {
-        const name = keyOf(it).trim() || "Không rõ";
-        const qty = num(it.quantity);
-        const rev = num(it.unit_price) * qty;
-        totalRev += rev;
-        const e = m.get(name) ?? { name, qty: 0, revenue: 0, orders: new Set<number>() };
-        e.qty += qty;
-        e.revenue += rev;
-        e.orders.add(num(o.id));
-        m.set(name, e);
+        const k = keyOf(it).trim() || "Khác";
+        const cur = map.get(k) ?? { key: k, revenue: 0, quantity: 0 };
+        const q = num(it.quantity);
+        cur.revenue += num(it.unit_price) * q;
+        cur.quantity += q;
+        map.set(k, cur);
       }
     }
-    return [...m.values()]
+    const totalRev = revenue || 1;
+    return [...map.values()]
       .sort((x, y) => y.revenue - x.revenue)
       .map((e) => ({
-        name: e.name,
-        qty: e.qty,
-        revenue: e.revenue,
-        orders: e.orders.size,
-        share: totalRev > 0 ? Math.round((e.revenue / totalRev) * 1000) / 10 : 0,
+        ...e,
+        pct: Math.round((e.revenue / totalRev) * 1000) / 10,
       }));
   };
 
@@ -274,7 +205,7 @@ export function analytics(db: Database, rangeRaw: string): Row {
       id: num(o.id),
       createdAt: iso(o.created_at),
       customerName: str(o.customer_name),
-      customerPhone: str(o.customer_phone),
+      customerPhone: str(o.phone ?? o.customer_phone),
       itemCount: (itemsByOrder.get(num(o.id)) ?? []).reduce(
         (a, it) => a + num(it.quantity),
         0,
@@ -284,21 +215,7 @@ export function analytics(db: Database, rangeRaw: string): Row {
     })),
   };
 
-  let subtotalBeforeBulk = 0;
-  let bulkDiscount = 0;
-  let couponDiscount = 0;
-  let subtotalAfterCoupon = 0;
-  let shippingFee = 0;
-  for (const o of paid) {
-    const before = num(o.subtotal_before_bulk);
-    const hasBulk = before > 0;
-    subtotalBeforeBulk += hasBulk ? before : num(o.subtotal);
-    bulkDiscount += hasBulk ? num(o.bulk_discount_amount) : 0;
-    couponDiscount += num(o.discount_amount);
-    const after = num(o.subtotal_after_coupon);
-    subtotalAfterCoupon += after > 0 ? after : num(o.subtotal) - num(o.discount_amount);
-    shippingFee += num(o.shipping_fee);
-  }
+  const discounts = aggregateDiscounts(paid);
 
   const stockRows = db.query("SELECT stock FROM product_variants").all() as Row[];
   const outOfStockCount = stockRows.filter((v) => num(v.stock) <= 0).length;
@@ -324,31 +241,7 @@ export function analytics(db: Database, rangeRaw: string): Row {
     stock: num(r.stock),
   }));
 
-  const custMap = new Map<
-    string,
-    { phone: string; name: string; orders: number; spent: number; lastTs: number }
-  >();
-  for (const o of paid) {
-    const phone = str(o.customer_phone).trim();
-    if (!phone) continue;
-    const e = custMap.get(phone) ?? {
-      phone,
-      name: str(o.customer_name),
-      orders: 0,
-      spent: 0,
-      lastTs: 0,
-    };
-    e.orders += 1;
-    e.spent += num(o.total);
-    if (num(o.created_at) >= e.lastTs) {
-      e.lastTs = num(o.created_at);
-      e.name = str(o.customer_name);
-    }
-    custMap.set(phone, e);
-  }
-  const repeatAll = [...custMap.values()]
-    .filter((c) => c.orders >= 2)
-    .sort((x, y) => y.orders - x.orders || y.spent - x.spent);
+  const { custMap, repeatAll } = aggregateCustomers(paid);
 
   return {
     range,
@@ -372,11 +265,7 @@ export function analytics(db: Database, rangeRaw: string): Row {
     byStatus,
     unpaidOrders,
     discounts: {
-      subtotalBeforeBulk,
-      bulkDiscount,
-      couponDiscount,
-      subtotalAfterCoupon,
-      shippingFee,
+      ...discounts,
       totalRevenue: revenue,
     },
     inventory: {

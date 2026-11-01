@@ -272,14 +272,9 @@ export function applyBulkUpdate(
     const first = pvars[0];
     if (first) {
       const fp = plansByProduct.get(pid)?.get(num(first.id));
-      const newPrice = fp ? fp.price : num(first.price);
-      const newPromo = fp ? fp.promoPrice : nullableNum(first.promo_price);
-      const newStock = fp ? fp.stock : num(first.stock);
       if (fp) {
-        db.query("UPDATE products SET price = ?, promo_price = ?, stock = ? WHERE id = ?").run(
-          newPrice,
-          newPromo,
-          newStock,
+        db.query("UPDATE products SET updated_at = ? WHERE id = ?").run(
+          new Date().toISOString(),
           pid,
         );
       }

@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api";
-import type { Product, ProductInput, ShopCollection } from "../types";
+import type { Product, ShopCollection } from "../types";
+import { slugify } from "../utils/slug";
 import type { DraftVariant, ProductFormShape } from "../utils/productFormTypes";
 import {
   draftFromVariant,
@@ -9,17 +8,15 @@ import {
   persistedVariantFromDraft,
   productShapeFromProduct,
 } from "../utils/productFormTypes";
-import {
-  buildDuplicateProductInput,
-  validateProductDraft,
-} from "../utils/productValidation";
 import type { CollectionCondition } from "../utils/collectionRules";
 import { productMatchesConditions } from "../utils/collectionRules";
+import { useProductDetailMutations } from "./useProductDetailMutations";
 
 export function useProductDetailForm({
   product,
   allProducts,
   collections,
+  catalog: _catalog,
   onSaved,
   onDeleted,
   onDuplicated,
@@ -27,11 +24,11 @@ export function useProductDetailForm({
   product: Product | null;
   allProducts: Product[];
   collections: ShopCollection[];
+  catalog?: any;
   onSaved: (msg: string) => void;
   onDeleted: (msg: string) => void;
   onDuplicated: (msg: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const [name, setName] = useState(product?.name ?? "");
   const [brand, setBrand] = useState(product?.brand ?? "");
   const [scale, setScale] = useState<string>(product?.scale ?? "1:32");
@@ -39,6 +36,10 @@ export function useProductDetailForm({
   const [vehicleType, setVehicleType] = useState(product?.vehicleType ?? "");
   const [isFeatured, setIsFeatured] = useState(product?.isFeatured ?? false);
   const [description, setDescription] = useState(product?.description ?? "");
+  const [seoTitle, setSeoTitle] = useState((product as any)?.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState((product as any)?.seoDescription ?? "");
+  const [slug, setSlug] = useState((product as any)?.slug ?? (product ? slugify(product.name) : ""));
+  const [slugTouched, setSlugTouched] = useState(false);
   const [tags, setTags] = useState<string[]>(
     (product?.features ?? "")
       .split("·")
@@ -86,6 +87,9 @@ export function useProductDetailForm({
     isFeatured,
     description: description.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
+    slug,
+    seoTitle,
+    seoDescription,
     variants: variants.map(persistedVariantFromDraft),
   });
 
@@ -108,6 +112,10 @@ export function useProductDetailForm({
     setDescription(saved.description);
     setTags(saved.tags);
     setTagDraft("");
+    setSlug(saved.slug || slugify(saved.name));
+    setSlugTouched(false);
+    setSeoTitle(saved.seoTitle || "");
+    setSeoDescription(saved.seoDescription || "");
     setVariants(
       product.variants
         .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -190,133 +198,76 @@ export function useProductDetailForm({
     setDragVariantTarget(null);
   };
 
-  const saveMut = useMutation({
-    mutationFn: ({ input }: { input: ProductInput; _snapshot: string }) =>
-      api.adminUpsertProduct(input),
-    onSuccess: (res, vars) => {
-      if (!res.ok) {
-        setFormError(res.error ?? "Không lưu được sản phẩm.");
-        return;
-      }
-      setSavedSnapshot(vars._snapshot);
-      setFormError(null);
-      setNotice("Đã lưu sản phẩm vào database chung — web bán hàng cập nhật ngay.");
-      queryClient.invalidateQueries();
-      onSaved(
-        product
-          ? `Đã lưu sản phẩm “${name.trim()}”.`
-          : `Đã thêm sản phẩm “${name.trim()}”.`,
-      );
-    },
-    onError: (e) => setFormError(e instanceof Error ? e.message : String(e)),
+  const { saveMut, deleteMut, duplicateMut, submit } = useProductDetailMutations({
+    product,
+    name,
+    brand,
+    scale,
+    modelMaker,
+    vehicleType,
+    isFeatured,
+    description,
+    tags,
+    slug,
+    seoTitle,
+    seoDescription,
+    variants,
+    currentShape,
+    setSavedSnapshot,
+    setNotice,
+    setFormError,
+    onSaved,
+    onDeleted,
+    onDuplicated,
   });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => api.adminDeleteProduct({ productId: id }),
-    onSuccess: (res) => {
-      if (!res.ok) {
-        setFormError(res.error ?? "Không xóa được sản phẩm.");
-        return;
-      }
-      queryClient.invalidateQueries();
-      onDeleted(`Đã xóa “${product?.name}” khỏi database chung.`);
-    },
-    onError: (e) => setFormError(e instanceof Error ? e.message : String(e)),
-  });
-
-  const duplicateMut = useMutation({
-    mutationFn: () => {
-      if (!product) throw new Error("Chưa có sản phẩm để nhân bản.");
-      return api.adminUpsertProduct(
-        buildDuplicateProductInput({
-          name,
-          brand,
-          scale,
-          modelMaker,
-          vehicleType,
-          description,
-          tags,
-          variants,
-        }),
-      );
-    },
-    onSuccess: (res) => {
-      if (!res.ok) {
-        setFormError(res.error ?? "Không nhân bản được sản phẩm.");
-        return;
-      }
-      queryClient.invalidateQueries();
-      onDuplicated(`Đã tạo bản sao “Bản sao của ${name.trim()}” trong database chung.`);
-    },
-    onError: (e) => setFormError(e instanceof Error ? e.message : String(e)),
-  });
-
-  const submit = () => {
-    setFormError(null);
-    setNotice(null);
-    const result = validateProductDraft({
-      name,
-      brand,
-      scale,
-      vehicleType,
-      description,
-      tags,
-      isFeatured,
-      modelMaker,
-      variants,
-      productId: product?.id ?? null,
-    });
-    if (!result.ok) {
-      return setFormError(result.error);
-    }
-
-    saveMut.mutate({
-      input: result.input,
-      _snapshot: JSON.stringify(currentShape()),
-    });
-  };
 
   const addTag = () => {
-    const t = tagDraft.trim().replace(/[,·]$/, "");
+    const t = tagDraft.trim();
     if (!t) return;
-    if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) setTags([...tags, t]);
+    if (!tags.includes(t)) setTags((ts) => [...ts, t]);
     setTagDraft("");
   };
 
   const onMediaUrlChange = (value: string) => {
     setMediaUrl(value);
     const trimmed = value.trim();
-    if (!trimmed) return setMediaUrlState("idle");
-    try {
-      const u = new URL(trimmed);
-      setMediaUrlState(
-        u.protocol === "http:" || u.protocol === "https:" ? "checking" : "error",
-      );
-    } catch {
-      setMediaUrlState("error");
+    if (!trimmed) {
+      setMediaUrlState("idle");
+      return;
     }
+    setMediaUrlState("checking");
+    const img = new Image();
+    img.onload = () => setMediaUrlState("ok");
+    img.onerror = () => setMediaUrlState("error");
+    img.src = trimmed;
   };
 
   const applyMediaUrl = () => {
-    setVariant(mediaTarget, {
-      imageMode: "link",
-      linkUrl: mediaUrl.trim(),
-      linkState: "ok",
-    });
-    setOpenPicker(mediaTarget);
-    setMediaUrlOpen(false);
+    const clean = mediaUrl.trim();
+    if (!clean) return;
+    setVariant(mediaTarget, { imageMode: "link", linkUrl: clean, linkState: "ok" });
     setMediaUrl("");
     setMediaUrlState("idle");
-    setNotice(
-      `Đã gắn link ảnh cho màu ${mediaTarget + 1} — bấm Lưu để ghi vào database chung.`,
-    );
+    setMediaUrlOpen(false);
   };
 
   const targetVariant = variants[Math.min(mediaTarget, Math.max(0, variants.length - 1))];
 
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!slugTouched) {
+      setSlug(slugify(val));
+    }
+  };
+
+  const handleSlugChange = (val: string) => {
+    setSlugTouched(true);
+    setSlug(val);
+  };
+
   return {
     name,
-    setName,
+    setName: handleNameChange,
     brand,
     setBrand,
     scale,
@@ -329,6 +280,12 @@ export function useProductDetailForm({
     setIsFeatured,
     description,
     setDescription,
+    seoTitle,
+    setSeoTitle,
+    seoDescription,
+    setSeoDescription,
+    slug,
+    setSlug: handleSlugChange,
     tags,
     setTags,
     tagDraft,
@@ -336,6 +293,7 @@ export function useProductDetailForm({
     variants,
     setVariants,
     formError,
+    setFormError,
     notice,
     setNotice,
     showPreview,

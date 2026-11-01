@@ -63,7 +63,6 @@ bun install   # hoặc npm install
 ```powershell
 .\run-all.ps1
 ```
-
 ### Cách 3: Chạy từng server thủ công trong 2 cửa sổ terminal:
 
 1. **Terminal 1 — Web Quản Trị (Cổng 8001):**
@@ -81,6 +80,56 @@ bun install   # hoặc npm install
    👉 Mở trình duyệt vào: **http://localhost:3000/**
 
 ---
+
+## 🛠️ Đóng gói & Quản lý Bundle Client (`main.js` & `main.css`)
+
+Dự án sử dụng cơ chế build client bằng Bun Bundler + Tailwind CSS v4 cực nhanh (~300ms). Trình duyệt tải giao diện từ thư mục tĩnh `dist/` của từng phân hệ (`admin/client/dist` và `custom/client/dist`).
+
+### 1. Phím tắt nhanh trong IDE (Khuyên dùng)
+- Nhấn tổ hợp phím **`Ctrl + Shift + B`** trong VS Code / Antigravity IDE để tự động build lại bundle client ngay tức thì mà không cần mở terminal.
+
+### 2. Chế độ tự động Rebuild khi lưu hoặc hoàn tác file (Watch Mode)
+Để không cần gõ lệnh thủ công mỗi lần sửa code hoặc khi hoàn tác (revert/reject) thay đổi:
+```bash
+# Giám sát và tự rebuild Web Quản Trị (admin):
+bun run watch:admin       # hoặc: bun --cwd admin build:watch
+```
+> **Cơ chế:** Bun sẽ giám sát liên tục thư mục client. Bất cứ khi nào bạn lưu file, AI sinh code, hoặc bạn bấm "Từ chối" (Reject) / Revert Git, bundle `main.js` và Tailwind CSS `main.css` sẽ tự động được biên dịch lại ngay lập tức.
+
+### 3. Lệnh Build thủ công từ Terminal
+
+> [!IMPORTANT]
+> **Lưu ý quan trọng khi chạy lệnh:**
+> 1. Luôn dùng lệnh có chữ **`run`** (ví dụ: `bun run build`), **không** gõ trơn `bun build` vì Bun sẽ hiểu nhầm là lệnh bundler nội bộ thiếu tham số và báo lỗi `Missing entrypoints`.
+> 2. Nếu sửa code giao diện Web Khách (`custom`), cần chạy lệnh build cho `custom` hoặc build tất cả.
+
+```bash
+# 🔹 Cách 1: Chạy từ thư mục gốc dự án (d:\code\storediecast)
+bun run build              # Build CẢ HAI phân hệ (Admin + Web Khách)
+bun run build:custom       # Chỉ build Web Khách (custom/client/dist/main.js & main.css)
+bun run build:admin        # Chỉ build Web Quản Trị (admin/client/dist/main.js & main.css)
+
+# 🔹 Cách 2: Chạy trực tiếp trong từng thư mục phân hệ
+cd custom && bun run build # Build Web Khách
+cd admin && bun run build  # Build Web Quản Trị
+```
+
+### 4. Cơ chế chống dính Cache trình duyệt (Hard Refresh)
+Cả hai server `admin/server.ts` (cổng 8001) và `custom/server.ts` (cổng 3000) đều được thiết lập header:
+```http
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Expires: 0
+```
+Tuy nhiên, trình duyệt web vẫn có thể lưu đệm file `main.js` / `main.css` trong Disk Cache / Memory Cache.
+* **Nếu tải lại trang bằng F5 mà chưa thấy thay đổi:**
+  * Nhấn tổ hợp phím **`Ctrl + Shift + R`** (hoặc **`Ctrl + F5`**) để buộc trình duyệt xóa cache và nạp file mới nhất từ đĩa.
+  * Hoặc mở DevTools (phím **`F12`**) $\to$ thẻ **Network** $\to$ tích chọn ô **"Disable cache"**.
+
+### 5. Xử lý gạch đỏ tạm thời do Cache TypeScript trong IDE (Restart TS Server)
+Khi chuyển đổi giữa các file hoặc AI vừa sửa prop của component con (như `onOpenProduct`), TypeScript Language Server trong editor có thể lưu cache định nghĩa cũ và báo lỗi gạch đỏ tạm thời (`Property does not exist on type...`).
+- **Khắc phục ngay trong 1 giây:** Nhấn **`Ctrl + Shift + P`** $\to$ Gõ **`TypeScript: Restart TS Server`** $\to$ Nhấn **`Enter`**. Editor sẽ quét lại toàn bộ file trên đĩa và xóa sạch mọi báo lỗi ảo.
+- **Kiểm tra thực tế:** Chạy lệnh `cd admin && bun run typecheck` trong terminal để đối soát chính xác theo file thật trên đĩa.
 
 ## 🔄 Cơ chế đồng bộ dữ liệu thời gian thực
 

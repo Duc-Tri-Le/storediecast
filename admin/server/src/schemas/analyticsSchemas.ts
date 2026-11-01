@@ -27,7 +27,11 @@ export type ShopOp =
   | "deleteCatalogEntry"
   | "listBulkUpdates"
   | "applyBulkUpdate"
-  | "analytics";
+  | "analytics"
+  | "listProductsPaginated"
+  | "listInventoryPaginated"
+  | "listOrdersPaginated"
+  | "listCollectionsPaginated";
 
 export async function callShop<T>(_ctx: Ctx, op: ShopOp, params: unknown): Promise<T> {
   const result = runOp(op, (params ?? {}) as any);

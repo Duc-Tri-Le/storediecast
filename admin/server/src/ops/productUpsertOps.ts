@@ -1,3 +1,4 @@
+import { slugify } from "../slug";
 import { Database } from "bun:sqlite";
 import {
   type CatalogEntry,
@@ -144,28 +145,46 @@ export function upsertProduct(db: Database, input: ProductInput): Row {
 
   const first = input.variants[0];
   if (!first) return fail("Sản phẩm cần ít nhất một màu.");
+  const slug = (input.slug && input.slug.trim()) ? slugify(input.slug) : slugify(name);
+  const seoTitle = (input.seoTitle ?? "").trim();
+  const seoDescription = (input.seoDescription ?? "").trim();
+  const nowIso = new Date().toISOString();
   let productId: number;
   if (input.id == null) {
     const ins = db
       .query(
-        `INSERT INTO products (name, brand, scale, vehicle_type, color_name, price, promo_price, stock, description, features, image_key, is_featured, model_maker, sku, sku_status, internal_code, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'incomplete', NULL, ?) RETURNING id`,
+        `INSERT INTO products (
+           name, brand, scale, vehicle_type,
+           description, features, is_featured, model_maker,
+           sku, sku_status, internal_code, created_at, updated_at,
+           slug, seo_title, seo_description,
+           loai_xe, hang_xe, ti_le
+         )
+         VALUES (
+           ?, ?, ?, ?,
+           ?, ?, ?, ?,
+           NULL, 'incomplete', NULL, ?, ?,
+           ?, ?, ?,
+           ?, ?, ?
+         ) RETURNING id`,
       )
       .get(
         name,
         brand,
         scale,
         vehicleType,
-        first.colorName.trim(),
-        first.price,
-        first.promoPrice,
-        first.stock,
         input.description.trim(),
         input.features.trim(),
-        first.imageKey.trim(),
         input.isFeatured ? 1 : 0,
         maker || null,
-        Date.now(),
+        nowIso,
+        nowIso,
+        slug,
+        seoTitle,
+        seoDescription,
+        vehicleType,
+        brand,
+        scale,
       ) as Row | null;
     if (!ins) return fail("Không tạo được sản phẩm.");
     productId = num(ins.id);
@@ -180,7 +199,7 @@ export function upsertProduct(db: Database, input: ProductInput): Row {
       .get(productId) as Row | null;
     if (!existing) return fail("Không tìm thấy sản phẩm để sửa.");
     db.query(
-      "UPDATE products SET name = ?, brand = ?, scale = ?, vehicle_type = ?, description = ?, features = ?, is_featured = ?, model_maker = ? WHERE id = ?",
+      "UPDATE products SET name = ?, brand = ?, scale = ?, vehicle_type = ?, description = ?, features = ?, is_featured = ?, model_maker = ?, slug = ?, seo_title = ?, seo_description = ?, loai_xe = ?, hang_xe = ?, ti_le = ?, updated_at = ? WHERE id = ?",
     ).run(
       name,
       brand,
@@ -190,6 +209,13 @@ export function upsertProduct(db: Database, input: ProductInput): Row {
       input.features.trim(),
       input.isFeatured ? 1 : 0,
       maker || null,
+      slug,
+      seoTitle,
+      seoDescription,
+      vehicleType,
+      brand,
+      scale,
+      nowIso,
       productId,
     );
     const currentVars = db
@@ -301,15 +327,14 @@ export function upsertProduct(db: Database, input: ProductInput): Row {
   }
 
   db.query(
-    "UPDATE products SET color_name = ?, price = ?, promo_price = ?, stock = ?, image_key = ?, sku = ?, sku_status = ? WHERE id = ?",
+    "UPDATE products SET sku = ?, sku_status = ?, loai_xe = ?, hang_xe = ?, ti_le = ?, updated_at = ? WHERE id = ?",
   ).run(
-    first.colorName.trim(),
-    first.price,
-    first.promoPrice,
-    first.stock,
-    first.imageKey.trim(),
     defaultSku,
     defaultSku ? "complete" : "incomplete",
+    vehicleType,
+    brand,
+    scale,
+    nowIso,
     productId,
   );
   return { ok: true, error: null, productId };

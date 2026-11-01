@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import type { Product } from "../types";
-import type { CollectionKind } from "../utils/collectionRules";
+import type { CollectionKind, MatchMode } from "../utils/collectionRules";
 import { fmtVND, totalStock, defaultVariant } from "../utils/format";
 import { Icon, Thumb, ICONS } from "./shared";
+import { CollectionProductTable } from "./CollectionProductTable";
 
 export type CollectionSortKey =
   | "manual"
@@ -40,12 +41,12 @@ export function CollectionProductList({
   onRemoveManual: (id: number) => void;
   onBulkRemove: (ids: number[]) => void;
   onMoveManual: (i: number, dir: -1 | 1) => void;
-  onOpenProduct: (p: Product) => void;
+  onOpenProduct?: (p: Product) => void;
   displayedProducts: Product[];
   sortedProducts: Product[];
   positionIndexOf: Map<number, number>;
   autoMatchedCount: number;
-  matchMode: string;
+  matchMode: MatchMode;
   title: string;
 }) {
   const [addSearch, setAddSearch] = useState("");
@@ -55,256 +56,174 @@ export function CollectionProductList({
     const q = addSearch.trim().toLowerCase();
     if (!q) return [];
     return products
+      .filter((p) => !manualIds.includes(p.id))
       .filter(
         (p) =>
-          !manualIds.includes(p.id) &&
-          (p.name.toLowerCase().includes(q) ||
-            p.brand.toLowerCase().includes(q) ||
-            p.scale.includes(q)),
+          p.name.toLowerCase().includes(q) ||
+          p.brand.toLowerCase().includes(q) ||
+          p.scale.includes(q),
       )
       .slice(0, 8);
-  }, [products, manualIds, addSearch]);
+  }, [addSearch, products, manualIds]);
 
   const selectCls =
-    "rounded-lg border border-[var(--border)] bg-white px-2 py-2 text-sm outline-none focus:border-[var(--accent)]";
+    "rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-medium outline-none focus:border-[var(--accent)] shadow-2xs";
 
-  const productStatus = (p: Product) =>
-    totalStock(p) > 0 ? (
-      <span className="inline-block rounded bg-[#dcf2e3] px-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#14663c]">
-        Còn hàng
-      </span>
-    ) : (
-      <span className="inline-block rounded bg-[#fbe3e3] px-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#9c2b2b]">
-        Hết hàng
-      </span>
-    );
+  const allSelected =
+    displayedProducts.length > 0 &&
+    displayedProducts.every((p) => checkedIds.has(p.id));
 
-  const productRow = (p: Product, idx: number, editable: boolean) => (
-    <div
-      key={p.id}
-      className="flex flex-wrap items-center gap-2.5 border-b border-[var(--border)] py-2.5 last:border-0 sm:flex-nowrap"
-    >
-      {editable ? (
-        <input
-          type="checkbox"
-          aria-label={`Chọn sản phẩm ${p.name} trong bộ`}
-          checked={checkedIds.has(p.id)}
-          onChange={(e) =>
-            setCheckedIds((prev) => {
-              const next = new Set(prev);
-              if (e.target.checked) next.add(p.id);
-              else next.delete(p.id);
-              return next;
-            })
-          }
-          className="h-4 w-4 shrink-0"
-        />
-      ) : (
-        <span className="w-4 shrink-0" aria-hidden />
-      )}
-      <span className="flex w-16 shrink-0 items-center gap-1">
-        <span className="w-5 text-center text-sm font-medium">{idx + 1}</span>
-        {editable && sortKey === "manual" && (
-          <span className="flex flex-col">
-            <button
-              type="button"
-              aria-label={`Đưa ${p.name} lên một vị trí`}
-              disabled={idx === 0}
-              onClick={() => onMoveManual(idx, -1)}
-              className="px-1 text-xs leading-3 text-[var(--dim)] disabled:opacity-30"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              aria-label={`Đưa ${p.name} xuống một vị trí`}
-              disabled={idx === displayedProducts.length - 1}
-              onClick={() => onMoveManual(idx, 1)}
-              className="px-1 text-xs leading-3 text-[var(--dim)] disabled:opacity-30"
-            >
-              ▼
-            </button>
-          </span>
-        )}
-      </span>
-      <button
-        type="button"
-        aria-label={`Mở chi tiết sản phẩm ${p.name}`}
-        onClick={() => onOpenProduct(p)}
-        className="shrink-0 rounded-md transition-opacity hover:opacity-80"
-      >
-        <Thumb product={p} size={40} />
-      </button>
-      <span className="min-w-0 flex-1 basis-40">
-        <button
-          type="button"
-          aria-label={`Mở chi tiết sản phẩm ${p.name}`}
-          onClick={() => onOpenProduct(p)}
-          className="block max-w-full truncate text-left text-sm font-medium text-[var(--accent)] hover:underline"
-        >
-          {p.name}
-        </button>
-        <span className="block text-xs text-[var(--dim)]">
-          {p.brand} · Tỉ lệ {p.scale} · {p.vehicleType} ·{" "}
-          {fmtVND(defaultVariant(p)?.promoPrice ?? defaultVariant(p)?.price ?? 0)}
-        </span>
-      </span>
-      {productStatus(p)}
-      {editable && (
-        <button
-          type="button"
-          aria-label={`Bỏ ${p.name} khỏi bộ ${title}`}
-          onClick={() => {
-            onRemoveManual(p.id);
-            setCheckedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(p.id);
-              return next;
-            });
-          }}
-          className="rounded-lg border border-[#e3b3b3] px-2.5 py-1 text-sm text-[#9c2b2b]"
-        >
-          Bỏ
-        </button>
-      )}
-    </div>
-  );
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(displayedProducts.map((p) => p.id)));
+    }
+  };
 
   return (
-    <div>
-      <div className="mt-3">
-        <select
-          id="cd-sort"
-          aria-label="Sắp xếp sản phẩm trong bộ"
-          className={`${selectCls} w-full max-w-72`}
-          value={sortKey}
-          onChange={(e) => onSortChange(e.target.value as CollectionSortKey)}
-        >
-          <option value="manual">Thủ công (theo vị trí đã xếp)</option>
-          <option value="titleAsc">Tiêu đề sản phẩm A-Z</option>
-          <option value="titleDesc">Tiêu đề sản phẩm Z-A</option>
-          <option value="priceDesc">Giá cao nhất</option>
-          <option value="priceAsc">Giá thấp nhất</option>
-          <option value="newest">Mới nhất</option>
-          <option value="oldest">Cũ nhất</option>
-        </select>
+    <div className="space-y-4">
+      {/* Thanh công cụ: Sắp xếp + Thống kê */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--table-head)]/30 p-3.5 sm:p-4">
+        <div className="flex items-center gap-2.5">
+          <label htmlFor="cd-sort" className="text-xs font-semibold text-[var(--dim)]">
+            Sắp xếp:
+          </label>
+          <select
+            id="cd-sort"
+            aria-label="Sắp xếp sản phẩm trong bộ"
+            className={selectCls}
+            value={sortKey}
+            onChange={(e) => onSortChange(e.target.value as CollectionSortKey)}
+          >
+            <option value="manual">Thủ công (theo thứ tự sắp xếp)</option>
+            <option value="titleAsc">Tên sản phẩm A → Z</option>
+            <option value="titleDesc">Tên sản phẩm Z → A</option>
+            <option value="priceDesc">Giá cao nhất trước</option>
+            <option value="priceAsc">Giá thấp nhất trước</option>
+            <option value="newest">Mới nhất trước</option>
+            <option value="oldest">Cũ nhất trước</option>
+          </select>
+        </div>
+
+        <div className="text-xs">
+          {mode === "manual" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1 font-medium text-[var(--dim)] shadow-2xs">
+              Tổng cộng: <strong className="text-[var(--text)] font-bold">{displayedProducts.length}</strong> sản phẩm
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1 font-medium text-[var(--dim)] shadow-2xs">
+              Tự động khớp: <strong className="text-[var(--accent)] font-bold">{autoMatchedCount}</strong> sản phẩm ({matchMode === "all" ? "tất cả ĐK" : "bất kỳ ĐK"})
+            </span>
+          )}
+        </div>
       </div>
 
-      {mode === "manual" ? (
-        <>
-          <div className="mt-3">
-            <div className="relative">
-              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--dim)]">
-                <Icon d={ICONS.search} size={16} />
-              </span>
-              <input
-                type="search"
-                value={addSearch}
-                onChange={(e) => setAddSearch(e.target.value)}
-                placeholder="Tìm sản phẩm để thêm vào bộ"
-                aria-label="Tìm sản phẩm để thêm vào bộ"
-                className="w-full rounded-lg border border-[var(--border)] bg-white py-2.5 pr-3 pl-9 text-sm outline-none placeholder:text-[var(--dim)] focus:border-[var(--accent)]"
-              />
-            </div>
-            {addSearch.trim() && (
-              <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
-                {addResults.length === 0 && (
-                  <li className="text-sm text-[var(--dim)]">
-                    Không còn sản phẩm nào khớp để thêm.
-                  </li>
-                )}
-                {addResults.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3">
-                    <Thumb product={p} size={36} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{p.name}</span>
-                      <span className="block text-xs text-[var(--dim)]">
-                        {p.brand} · Tỉ lệ {p.scale} · Tồn {totalStock(p)}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Thêm ${p.name} vào bộ ${title}`}
-                      onClick={() => onAddManual(p.id)}
-                      className="rounded-lg bg-[var(--accent)] px-3 py-1 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-dark)]"
-                    >
-                      Thêm
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+      {/* Ô tìm kiếm & thêm sản phẩm nhanh ở chế độ thủ công */}
+      {mode === "manual" && (
+        <div className="relative">
+          <div className="relative">
+            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--dim)]">
+              <Icon d={ICONS.search} size={15} />
+            </span>
+            <input
+              type="search"
+              value={addSearch}
+              onChange={(e) => setAddSearch(e.target.value)}
+              placeholder="Nhập tên xe, hãng xe, tỉ lệ để tìm và thêm vào bộ…"
+              aria-label="Tìm sản phẩm để thêm vào bộ"
+              className="w-full rounded-xl border border-[var(--border)] bg-white py-2.5 pr-3 pl-9 text-xs outline-none transition placeholder:text-[var(--dim)] focus:border-[var(--accent)] shadow-2xs"
+            />
           </div>
-          <div className="mt-2 hidden grid-cols-[1rem_4rem_2.5rem_1fr_auto] items-center gap-2.5 border-b border-[var(--border)] pb-1 text-xs font-medium text-[var(--dim)] sm:grid">
-            <span aria-hidden />
-            <span>Vị trí</span>
-            <span>Ảnh</span>
-            <span>Tiêu đề sản phẩm</span>
-            <span>Trạng thái</span>
-          </div>
-          {displayedProducts.length === 0 ? (
-            <p className="py-4 text-sm text-[var(--dim)]">
-              Bộ này chưa có sản phẩm nào — tìm sản phẩm ở trên rồi bấm Thêm.
-            </p>
-          ) : (
-            sortedProducts.map((p) =>
-              productRow(p, positionIndexOf.get(p.id) ?? 0, true),
-            )
-          )}
-          {checkedIds.size > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">Đã chọn {checkedIds.size} sản phẩm</span>
-              <button
-                type="button"
-                onClick={() => {
-                  onBulkRemove(Array.from(checkedIds));
-                  setCheckedIds(new Set());
-                }}
-                className="rounded-lg border border-[#e3b3b3] px-3 py-1.5 text-sm font-medium text-[#9c2b2b]"
-              >
-                Bỏ các sản phẩm đã chọn khỏi bộ
-              </button>
-              <button
-                type="button"
-                onClick={() => setCheckedIds(new Set())}
-                className="text-sm text-[var(--accent)] underline"
-              >
-                Bỏ chọn
-              </button>
+
+          {addSearch.trim() && (
+            <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-[var(--border)] bg-white p-2 shadow-xl">
+              {addResults.length === 0 ? (
+                <p className="p-3 text-center text-xs text-[var(--dim)]">
+                  Không tìm thấy sản phẩm nào khả dụng để thêm.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--border)]">
+                  {addResults.map((p) => {
+                    const v = defaultVariant(p);
+                    return (
+                      <li
+                        key={p.id}
+                        className="flex items-center gap-3 p-2 hover:bg-[var(--sidebar)] rounded-lg transition"
+                      >
+                        <Thumb product={p} size={36} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-[var(--text)]">
+                            {p.name}
+                          </p>
+                          <p className="text-[11px] text-[var(--dim)]">
+                            {p.brand} · Tỉ lệ {p.scale} · {v ? fmtVND(v.promoPrice || v.price) : "—"} · Tồn {totalStock(p)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddManual(p.id);
+                            setAddSearch("");
+                          }}
+                          className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[var(--accent-dark)] transition"
+                        >
+                          + Thêm vào bộ
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
-          <p className="mt-2 text-xs text-[var(--dim)]">
-            Thêm, bỏ và đổi vị trí ở đây được ghi vào database chung khi bấm Lưu ở cuối
-            trang — sản phẩm trong bộ hiện thẻ tag tên bộ này ở trang chi tiết của nó.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="mt-3 text-sm text-[var(--dim)]">
-            Chế độ Tự động: danh sách tự tính theo điều kiện ở trên (
-            {matchMode === "all" ? "khớp tất cả điều kiện" : "khớp bất kỳ điều kiện nào"})
-            — hiện đang khớp {autoMatchedCount} sản phẩm, tự cập nhật khi sản phẩm
-            hoặc điều kiện thay đổi.
-          </p>
-          <div className="mt-2 hidden grid-cols-[1rem_4rem_2.5rem_1fr_auto] items-center gap-2.5 border-b border-[var(--border)] pb-1 text-xs font-medium text-[var(--dim)] sm:grid">
-            <span aria-hidden />
-            <span>Vị trí</span>
-            <span>Ảnh</span>
-            <span>Tiêu đề sản phẩm</span>
-            <span>Trạng thái</span>
-          </div>
-          {displayedProducts.length === 0 ? (
-            <p className="py-4 text-sm text-[var(--dim)]">
-              Chưa có sản phẩm nào khớp điều kiện hiện tại.
-            </p>
-          ) : (
-            sortedProducts.map((p) =>
-              productRow(p, positionIndexOf.get(p.id) ?? 0, false),
-            )
-          )}
-        </>
+        </div>
       )}
+
+      {/* Thanh thao tác nhóm (Bulk actions bar khi có chọn checkbox) */}
+      {mode === "manual" && checkedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-soft)]/50 p-3 text-xs shadow-2xs">
+          <div className="flex items-center gap-2 font-semibold text-[var(--accent-dark)]">
+            <span>Đã chọn <strong>{checkedIds.size}</strong> / {displayedProducts.length} sản phẩm</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onBulkRemove(Array.from(checkedIds));
+                setCheckedIds(new Set());
+              }}
+              className="rounded-lg bg-[#c5221f] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#a51b18] transition"
+            >
+              Bỏ khỏi bộ ({checkedIds.size})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCheckedIds(new Set())}
+              className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--dim)] hover:text-[var(--text)] transition"
+            >
+              Bỏ chọn
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bảng danh sách sản phẩm trong bộ */}
+      <CollectionProductTable
+        mode={mode}
+        sortKey={sortKey}
+        displayedProducts={displayedProducts}
+        sortedProducts={sortedProducts}
+        positionIndexOf={positionIndexOf}
+        checkedIds={checkedIds}
+        setCheckedIds={setCheckedIds}
+        allSelected={allSelected}
+        toggleSelectAll={toggleSelectAll}
+        onOpenProduct={onOpenProduct}
+        onMoveManual={onMoveManual}
+        onRemoveManual={onRemoveManual}
+        title={title}
+      />
     </div>
   );
 }
-

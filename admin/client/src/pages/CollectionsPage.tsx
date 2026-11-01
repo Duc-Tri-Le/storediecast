@@ -1,41 +1,73 @@
-import { useState } from "react";
-import type { Product, ShopCollection, CatalogData, Order } from "../types";
-import type { CollectionKind } from "../utils/collectionRules";
-import {
-  Icon,
-  ICONS,
-  BulkDeleteBar,
-  BulkDeleteConfirmDialog,
-} from "../components/shared";
+import { useState, useMemo, useEffect } from "react";
+import type { CatalogData, Order, Product, ShopCollection } from "../types";
+import type {
+  CollectionKind,
+  CollectionNav,
+} from "../utils/collectionRules";
 import { CollectionDetailPage } from "./CollectionDetailPage";
-import { ProductDetailPage } from "./ProductDetailPage";
-import { CollectionCreator } from "../components/CollectionCreator";
-import { CollectionTable } from "../components/CollectionTable";
 import { useCollectionsData } from "../hooks/useCollectionsData";
+import { CollectionsPageListView } from "../components/CollectionsPageListView";
 
 export function CollectionsPage({
   products,
   loading,
   collections,
-  collectionsError,
   catalog,
+  collectionsError,
   orders,
   onViewScale,
   onViewBrand,
   onViewType,
+  onOpenProduct,
+  routeIsNewCollection,
+  routeCollectionId,
+  onNavigateCreating,
+  onNavigateCollection,
+  routePageNumber = 1,
+  routeTab = "all",
+  routeSearch = "",
+  routeSort = "best",
+  onNavigateRoute,
 }: {
   products: Product[];
   loading: boolean;
   collections: ShopCollection[];
-  collectionsError: string | null;
   catalog: CatalogData | null;
+  collectionsError: string | null;
   orders: Order[];
   onViewScale: (scale: string) => void;
   onViewBrand: (brand: string) => void;
-  onViewType: (vehicleType: string) => void;
+  onViewType: (type: string) => void;
+  onOpenProduct: (id: number) => void;
+  routeIsNewCollection?: boolean;
+  routeCollectionId?: string | number | null;
+  onNavigateCreating?: (creating: boolean) => void;
+  onNavigateCollection?: (collectionId: string | null) => void;
+  routePageNumber?: number;
+  routeTab?: string;
+  routeSearch?: string;
+  routeSort?: string;
+  onNavigateRoute?: (params: {
+    pageNumber?: number;
+    tab?: string;
+    search?: string;
+    sort?: string;
+  }) => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const [detailProductId, setDetailProductId] = useState<number | null>(null);
+  const [creating, setCreating] = useState(Boolean(routeIsNewCollection));
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPageLocal] = useState(routePageNumber || 1);
+
+  useEffect(() => {
+    if (routeIsNewCollection !== undefined) {
+      setCreating(routeIsNewCollection);
+    }
+  }, [routeIsNewCollection]);
+
+  const handleSetCreating = (val: boolean) => {
+    setCreating(val);
+    onNavigateCreating?.(val);
+  };
 
   const {
     tab,
@@ -67,27 +99,106 @@ export function CollectionsPage({
     bulkDeleteMut,
   } = useCollectionsData({ products, collections, catalog, orders });
 
-  const detailProduct =
-    detailProductId != null
-      ? (products.find((p) => p.id === detailProductId) ?? null)
-      : null;
+  useEffect(() => {
+    if (routePageNumber != null) setCurrentPageLocal(routePageNumber);
+    if (routeTab != null && ["all", "manual", "auto"].includes(routeTab)) {
+      setTab(routeTab as "all" | CollectionKind);
+    }
+    if (routeSearch !== undefined) setSearch(routeSearch);
+    if (routeSort != null) setSort(routeSort);
+  }, [routePageNumber, routeTab, routeSearch, routeSort, setTab, setSearch, setSort]);
 
-  if (detailProduct) {
-    return (
-      <ProductDetailPage
-        key={detailProduct.id}
-        product={detailProduct}
-        allProducts={products}
-        collections={collections}
-        catalog={catalog}
-        backLabel="Bộ sưu tập"
-        onBack={() => setDetailProductId(null)}
-        onSaved={() => setDetailProductId(null)}
-        onDeleted={() => setDetailProductId(null)}
-        onDuplicated={() => setDetailProductId(null)}
-      />
-    );
-  }
+  // Đồng bộ chi tiết bộ sưu tập từ URL khi routeCollectionId thay đổi
+  useEffect(() => {
+    if (routeCollectionId != null && routeCollectionId !== "") {
+      const targetStr = String(routeCollectionId);
+      const matched = visible.find((r) => {
+        if (r.id === targetStr) return true;
+        if (r.id === `custom-${targetStr}`) return true;
+        if (r.custom && (String(r.custom.id) === targetStr || r.custom.slug === targetStr)) return true;
+        if (r.isBase && (r.id === `base-scale-${targetStr}` || r.nav?.value === targetStr)) return true;
+        return false;
+      });
+      if (matched) {
+        setSelectedId(matched.id);
+      } else {
+        setSelectedId(targetStr);
+      }
+    } else {
+      setSelectedId(null);
+    }
+  }, [routeCollectionId, visible, setSelectedId]);
+
+  const handleSelectCollection = (id: string | null) => {
+    if (!id) {
+      setSelectedId(null);
+      onNavigateCollection?.(null);
+      return;
+    }
+    setSelectedId(id);
+    const matched = visible.find((r) => r.id === id);
+    const navId = matched?.custom?.id != null
+      ? String(matched.custom.id)
+      : id.replace(/^custom-/, "");
+    onNavigateCollection?.(navId);
+  };
+
+  const updateRoute = (updates: {
+    pageNumber?: number;
+    tab?: string;
+    search?: string;
+    sort?: string;
+  }) => {
+    const nextTab = updates.tab !== undefined ? updates.tab : tab;
+    const nextSearch = updates.search !== undefined ? updates.search : search;
+    const nextSort = updates.sort !== undefined ? updates.sort : sort;
+    const nextPage = updates.pageNumber !== undefined ? updates.pageNumber : 1;
+
+    if (onNavigateRoute) {
+      onNavigateRoute({
+        pageNumber: nextPage,
+        tab: nextTab,
+        search: nextSearch,
+        sort: nextSort,
+      });
+    }
+  };
+
+  const handleTabChange = (t: "all" | CollectionKind) => {
+    setTab(t);
+    setCurrentPageLocal(1);
+    updateRoute({ tab: t, pageNumber: 1 });
+  };
+
+  const handleSearchChange = (s: string) => {
+    setSearch(s);
+    setCurrentPageLocal(1);
+    updateRoute({ search: s, pageNumber: 1 });
+  };
+
+  const handleSortChange = (st: string) => {
+    setSort(st);
+    setCurrentPageLocal(1);
+    updateRoute({ sort: st, pageNumber: 1 });
+  };
+
+  const handlePageChange = (p: number) => {
+    setCurrentPageLocal(p);
+    updateRoute({ pageNumber: p });
+  };
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPageLocal(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedVisible = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return visible.slice(start, start + PAGE_SIZE);
+  }, [visible, currentPage, PAGE_SIZE]);
 
   if (selectedRow && selectedRow.custom) {
     return (
@@ -97,198 +208,72 @@ export function CollectionsPage({
         collection={selectedRow.custom}
         products={products}
         catalog={catalog}
-        onBack={() => setSelectedId(null)}
+        onBack={() => handleSelectCollection(null)}
         onDeleted={(msg) => {
-          setSelectedId(null);
+          handleSelectCollection(null);
           setNotice(msg);
         }}
-        onViewNav={(nav) => {
+        onViewNav={(nav: CollectionNav) => {
           if (nav.kind === "scale") onViewScale(nav.value);
           else if (nav.kind === "brand") onViewBrand(nav.value);
-          else onViewType(nav.value);
+          else if (nav.kind === "vehicleType") onViewType(nav.value);
         }}
-        onOpenProduct={(p) => setDetailProductId(p.id)}
+        onOpenProduct={(p) => onOpenProduct(p.id)}
       />
     );
   }
 
-  const tabs: Array<["all" | CollectionKind, string]> = [
-    ["all", "Tất cả"],
-    ["manual", "Bộ sưu tập thủ công"],
-    ["auto", "Bộ sưu tập tự động"],
-  ];
-
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-bold tracking-tight">Bộ sưu tập</h1>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-3.5 py-2 text-sm font-semibold text-white"
-        >
-          <Icon d={ICONS.plus} size={15} /> Tạo bộ sưu tập
-        </button>
-      </div>
-
-      {notice && (
-        <p className="mt-4 rounded-lg bg-[var(--accent-soft)] px-4 py-3 text-sm">
-          {notice}
-        </p>
-      )}
-      {collectionsError && (
-        <p className="mt-4 rounded-lg bg-[#fbe3e3] px-4 py-3 text-sm text-[#9c2b2b]">
-          Không tải được bộ sưu tập tự tạo từ database chung: {collectionsError}
-        </p>
-      )}
-
-      <div className="mt-5 overflow-hidden rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)]">
-        <div
-          className="flex flex-wrap gap-x-4 gap-y-1 border-b border-[var(--border)] px-4"
-          role="tablist"
-          aria-label="Loại bộ sưu tập"
-        >
-          {tabs.map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-              className={`-mb-px border-b-2 px-1 pt-3 pb-2 text-sm whitespace-nowrap ${
-                tab === key
-                  ? "border-[var(--accent)] font-semibold text-[var(--accent)]"
-                  : "border-transparent text-[var(--dim)] hover:text-[var(--text)]"
-              }`}
-            >
-              {label} ({counts[key]})
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row">
-          <div className="relative flex-1">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--dim)]">
-              <Icon d={ICONS.search} size={16} />
-            </span>
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm kiếm bộ sưu tập"
-              aria-label="Tìm kiếm bộ sưu tập"
-              className="w-full rounded-lg border border-[var(--border)] bg-white py-2.5 pr-3 pl-9 text-sm outline-none placeholder:text-[var(--dim)] focus:border-[var(--accent)]"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <span className="sr-only">Sắp xếp bộ sưu tập</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              aria-label="Sắp xếp bộ sưu tập"
-              className="rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="best">Bán chạy nhất</option>
-              <option value="countDesc">Số mẫu nhiều nhất</option>
-              <option value="stockDesc">Tồn kho cao nhất</option>
-              <option value="nameAsc">Tên A → Z</option>
-              <option value="nameDesc">Tên Z → A</option>
-              <option value="createdDesc">Tạo mới → cũ</option>
-              <option value="createdAsc">Tạo cũ → mới</option>
-            </select>
-          </label>
-        </div>
-
-        {loading && (
-          <p className="px-4 pb-6 text-sm text-[var(--dim)]">Đang tải bộ sưu tập…</p>
-        )}
-        {!loading && visible.length === 0 && (
-          <div className="px-4 py-10 text-center">
-            {tab === "manual" && counts.manual === 0 && !search ? (
-              <>
-                <p className="text-sm text-[var(--dim)]">
-                  Chưa có bộ sưu tập tự tạo nào. Tạo một bộ ở đây rồi thêm sản phẩm vào —
-                  bộ sẽ hiện thành thẻ tag ở trang chi tiết của từng sản phẩm đó.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setCreating(true)}
-                  className="mt-3 rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-3.5 py-2 text-sm font-semibold text-white"
-                >
-                  Tạo bộ sưu tập thủ công
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-[var(--dim)]">Không có bộ sưu tập nào khớp.</p>
-            )}
-          </div>
-        )}
-
-        {visible.length > 0 && (
-          <CollectionTable
-            visible={visible}
-            selectedId={selectedId}
-            selectedRowIds={selectedRowIds}
-            confirmDeleteId={confirmDeleteId}
-            allDeletableVisibleSelected={allDeletableVisibleSelected}
-            deletableVisibleCount={deletableVisible.length}
-            onSelectRow={setSelectedId}
-            onToggleSelectAll={toggleSelectAllCollections}
-            onToggleSelectRow={toggleCollectionSelected}
-            onOpenDetail={setSelectedId}
-            onToggleStatus={toggleStatus}
-            onConfirmDelete={setConfirmDeleteId}
-            onCancelDelete={() => setConfirmDeleteId(null)}
-            onDeleteDirect={deleteCustom}
-          />
-        )}
-      </div>
-
-      <BulkDeleteBar
-        count={selectedCollectionRows.length}
-        unit="bộ sưu tập"
-        deleting={bulkDeleteMut.isPending}
-        onDelete={() => setConfirmBulkDelete(true)}
-        onClear={() => setSelectedRowIds(new Set())}
-      />
-
-      {confirmBulkDelete && selectedCollectionRows.length > 0 && (
-        <BulkDeleteConfirmDialog
-          title={`Xóa ${selectedCollectionRows.length} bộ sưu tập đã chọn?`}
-          names={selectedCollectionRows.map((r) => r.title)}
-          consequence="Chỉ bộ sưu tập tự tạo và quan hệ của chúng với sản phẩm bị xóa — sản phẩm trong bộ vẫn giữ nguyên, chỉ mất thẻ tag của bộ đã xóa. 3 bộ theo tỉ lệ không nằm trong danh sách này và không bị xóa."
-          deleting={bulkDeleteMut.isPending}
-          onConfirm={() =>
-            bulkDeleteMut.mutate(
-              selectedCollectionRows
-                .map((r) => r.custom?.id)
-                .filter((x): x is number => x != null),
-            )
-          }
-          onCancel={() => setConfirmBulkDelete(false)}
-        />
-      )}
-
-      <p className="mt-3 text-xs leading-5 text-[var(--dim)]">
-        Cột Điều kiện hiện đúng các điều kiện đã lưu của từng bộ — sửa điều kiện ở trang
-        chi tiết bộ rồi bấm Lưu là danh sách sản phẩm của bộ tính lại theo điều kiện mới.
-      </p>
-
-      {creating && (
-        <CollectionCreator
-          products={products}
-          catalog={catalog}
-          onClose={() => setCreating(false)}
-          onCreated={(created) => {
-            setCreating(false);
-            setTab("all");
-            setSelectedId(`custom-${created.id}`);
-            setNotice(
-              `Đã tạo bộ sưu tập “${created.title}” (${created.status === "published" ? "Đã đăng" : "Nháp"}) trong database chung — mở chi tiết bộ để xem sản phẩm trong bộ.`,
-            );
-          }}
-        />
-      )}
-    </div>
+    <CollectionsPageListView
+      onAddNew={() => handleSetCreating(true)}
+      creating={creating}
+      onCloseCreating={() => handleSetCreating(false)}
+      onCreated={(c) => {
+        handleSetCreating(false);
+        setNotice(`Đã tạo bộ sưu tập "${c.title}".`);
+        if (c.id != null) setSelectedId(`custom-${c.id}`);
+      }}
+      products={products}
+      catalog={catalog}
+      notice={notice}
+      collectionsError={collectionsError}
+      tab={tab}
+      onTabChange={handleTabChange}
+      counts={counts}
+      search={search}
+      onSearchChange={handleSearchChange}
+      sort={sort}
+      onSortChange={handleSortChange}
+      loading={loading}
+      visibleCount={visible.length}
+      paginatedVisible={paginatedVisible}
+      selectedId={selectedId}
+      selectedRowIds={selectedRowIds}
+      confirmDeleteId={confirmDeleteId}
+      allDeletableVisibleSelected={allDeletableVisibleSelected}
+      deletableVisibleCount={deletableVisible.length}
+      onSelectCollection={handleSelectCollection}
+      onToggleSelectAll={toggleSelectAllCollections}
+      onToggleSelectRow={toggleCollectionSelected}
+      onToggleStatus={toggleStatus}
+      onConfirmDelete={setConfirmDeleteId}
+      onDeleteDirect={deleteCustom}
+      currentPage={currentPage}
+      totalPages={totalPages}
+      pageSize={PAGE_SIZE}
+      onPageChange={handlePageChange}
+      selectedCollectionRows={selectedCollectionRows}
+      isBulkDeleting={bulkDeleteMut.isPending}
+      confirmBulkDelete={confirmBulkDelete}
+      setConfirmBulkDelete={setConfirmBulkDelete}
+      onConfirmBulkDelete={() =>
+        bulkDeleteMut.mutate(
+          selectedCollectionRows
+            .map((r) => r.custom?.id)
+            .filter((x): x is number => x != null),
+        )
+      }
+      onClearBulkSelected={() => setSelectedRowIds(new Set())}
+    />
   );
 }

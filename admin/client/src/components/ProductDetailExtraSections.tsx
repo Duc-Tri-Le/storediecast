@@ -1,9 +1,8 @@
 import type { Product } from "../types";
 import type { DraftVariant } from "../utils/productFormTypes";
 import { fmtVND } from "../utils/format";
-import { cardCls, inputCls, labelCls, smallBtn } from "./shared";
+import { cardCls } from "./shared";
 import { DraftThumb, renderRichText } from "./VariantImagePicker";
-import type { RefObject } from "react";
 
 export function ProductDetailPreviewSection({
   product,
@@ -23,160 +22,52 @@ export function ProductDetailPreviewSection({
   targetVariant?: DraftVariant;
 }) {
   return (
-    <section className={`${cardCls} mt-4`} aria-label="Xem trước như khách thấy">
-      <h2 className="text-sm font-bold">Xem trước như khách thấy (dữ liệu đang nhập)</h2>
-      <div className="mt-3 flex flex-wrap items-start gap-4">
-        {targetVariant && <DraftThumb v={targetVariant} size={120} />}
+    <section className={`${cardCls} p-4 mb-4 border-[var(--accent)]/40 bg-[var(--accent-soft)]/20`} aria-label="Xem trước">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+            Xem trước giao diện khách thấy
+          </h2>
+        </div>
+        <span className="text-xs text-[var(--dim)] font-medium">Bản nháp dữ liệu đang nhập</span>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-start gap-4 rounded-xl border border-[var(--border)] bg-white p-3.5 shadow-sm">
+        {targetVariant && (
+          <div className="shrink-0 mx-auto sm:mx-0">
+            <DraftThumb v={targetVariant} size={110} />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-semibold">{name || product.name}</p>
-          <p className="text-sm text-[var(--dim)]">
-            {brand} · Tỉ lệ {scale} ·{" "}
+          <p className="text-base font-bold text-[var(--text)]">{name || product.name}</p>
+          <p className="mt-0.5 text-xs text-[var(--dim)]">
+            {brand || product.brand} · Tỉ lệ {scale || product.scale} ·{" "}
             {variants.map((v) => v.colorName).filter(Boolean).join(", ") || "Chưa có màu"}
           </p>
-          <p className="mt-1 text-sm">
+
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {variants.map((v, i) => {
               const p = Number(v.price.replace(/[^\d]/g, ""));
               return p > 0 ? (
-                <span key={i} className="mr-3">
-                  {v.colorName || `Màu ${i + 1}`}: <strong>{fmtVND(p)}</strong> · còn{" "}
-                  {v.stock || 0}
+                <span
+                  key={i}
+                  className="rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-medium text-[var(--text)]"
+                >
+                  {v.colorName || `Màu ${i + 1}`}:{" "}
+                  <strong className="text-[var(--accent)]">{fmtVND(p)}</strong> (kho: {v.stock || 0})
                 </span>
               ) : null;
             })}
-          </p>
+          </div>
+
           {description && (
-            <div className="mt-2 text-sm text-[var(--dim)]">{renderRichText(description)}</div>
+            <div className="mt-2.5 max-h-24 overflow-y-auto rounded-md bg-[var(--sidebar)]/40 p-2 text-xs text-[var(--dim)] leading-relaxed">
+              {renderRichText(description)}
+            </div>
           )}
         </div>
       </div>
-    </section>
-  );
-}
-
-export function ProductDetailTitleDescSection({
-  name,
-  setName,
-  description,
-  setDescription,
-  descPreview,
-  descRef,
-}: {
-  name: string;
-  setName: (n: string) => void;
-  description: string;
-  setDescription: (d: string) => void;
-  descPreview: boolean;
-  descRef: RefObject<HTMLTextAreaElement | null>;
-}) {
-  return (
-    <section className={cardCls} aria-label="Tiêu đề và mô tả">
-      <label className={labelCls} htmlFor="pd-name">
-        Tiêu đề
-      </label>
-      <input
-        id="pd-name"
-        className={inputCls}
-        value={name}
-        maxLength={160}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Ví dụ: Toyota GR Supra"
-      />
-      <p className="mt-1 text-right text-xs text-[var(--dim)]">{name.length} / 160</p>
-
-      <label className={labelCls} htmlFor="pd-desc">
-        Mô tả
-      </label>
-      {descPreview ? (
-        <div className="mt-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
-          {description ? (
-            renderRichText(description)
-          ) : (
-            <p className="text-[var(--dim)]">Chưa có mô tả.</p>
-          )}
-        </div>
-      ) : (
-        <textarea
-          id="pd-desc"
-          ref={descRef}
-          className={`${inputCls} mt-2`}
-          rows={8}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Mô tả sản phẩm"
-        />
-      )}
-    </section>
-  );
-}
-
-export function ProductDetailSeoSection({
-  name,
-  setName,
-  description,
-  setDescription,
-  seoOpen,
-  setSeoOpen,
-}: {
-  name: string;
-  setName: (n: string) => void;
-  description: string;
-  setDescription: (d: string) => void;
-  seoOpen: boolean;
-  setSeoOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
-}) {
-  return (
-    <section
-      className={`${cardCls} mt-4`}
-      aria-label="Xem trước hiển thị trên công cụ tìm kiếm"
-    >
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold">Xem trước hiển thị trên công cụ tìm kiếm</h2>
-        <button
-          type="button"
-          aria-expanded={seoOpen}
-          onClick={() => setSeoOpen((s) => !s)}
-          className="text-sm font-medium text-[var(--accent)]"
-        >
-          Sửa SEO
-        </button>
-      </div>
-      <div className="mt-3 rounded-lg border border-[var(--border)] px-4 py-3">
-        <p className="text-base text-[#1558b0]">{name.trim() || "Tên sản phẩm"}</p>
-        <p className="text-xs text-[#3d7a44]">
-          Web bán hàng › Sản phẩm ›{" "}
-          {(name.trim() || "san-pham").toLowerCase().replace(/\s+/g, "-")}
-        </p>
-        <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">
-          {description.trim() || "Mô tả sản phẩm sẽ hiện ở đây."}
-        </p>
-      </div>
-      {seoOpen && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="pd-seo-title">
-              Tiêu đề SEO
-            </label>
-            <input
-              id="pd-seo-title"
-              className={inputCls}
-              value={name}
-              maxLength={160}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="pd-seo-desc">
-              Mô tả SEO
-            </label>
-            <input
-              id="pd-seo-desc"
-              className={inputCls}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
     </section>
   );
 }
@@ -190,6 +81,7 @@ export function ProductDetailBottomBar({
   onBack,
   isPendingSave,
   onSubmit,
+  isDirty,
 }: {
   product: Product | null;
   confirmDelete: boolean;
@@ -199,53 +91,76 @@ export function ProductDetailBottomBar({
   onBack: () => void;
   isPendingSave: boolean;
   onSubmit: () => void;
+  isDirty?: boolean;
 }) {
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2">
-      {product &&
-        (confirmDelete ? (
-          <>
-            <span className="text-sm text-[#9c2b2b]">
-              Xóa hẳn “{product.name}” khỏi database chung?
-            </span>
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
+      {/* Phía trái: Nút xóa */}
+      <div>
+        {product &&
+          (confirmDelete ? (
+            <div className="flex items-center gap-2 rounded-lg bg-[#fbe3e3] px-3 py-1.5 text-xs text-[#9c2b2b]">
+              <span>Xóa hẳn “{product.name}”?</span>
+              <button
+                type="button"
+                disabled={isPendingDelete}
+                onClick={onDelete}
+                className="rounded bg-[#c0392b] px-2.5 py-1 font-bold text-white hover:bg-[#9c2b2b] disabled:opacity-50"
+              >
+                Xóa ngay
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="font-medium underline hover:text-black"
+              >
+                Hủy
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              disabled={isPendingDelete}
-              onClick={onDelete}
-              className="rounded-lg bg-[#c0392b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              onClick={() => setConfirmDelete(true)}
+              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[#c0392b] transition hover:bg-[#fbe3e3]"
             >
-              Chắc chắn xóa
+              Xóa sản phẩm
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className={smallBtn}
-            >
-              Không xóa
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="rounded-lg bg-[#c0392b] px-4 py-2 text-sm font-semibold text-white"
-          >
-            Xóa sản phẩm
-          </button>
-        ))}
-      <span className="flex-1" />
-      <button type="button" onClick={onBack} className={smallBtn}>
-        Hủy
-      </button>
-      <button
-        type="button"
-        disabled={isPendingSave}
-        onClick={onSubmit}
-        className="rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        {isPendingSave ? "Đang lưu…" : product ? "Lưu" : "Thêm sản phẩm"}
-      </button>
+          ))}
+      </div>
+
+      {/* Phía phải: Hủy & Lưu */}
+      <div className="flex items-center gap-2 ml-auto">
+        {isDirty && (
+          <span className="text-xs font-medium text-[#8a5d08] bg-[#fdf0d3] px-2.5 py-1 rounded-md">
+            ● Có thay đổi chưa lưu
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--sidebar)]"
+        >
+          Quay lại
+        </button>
+        <button
+          type="button"
+          disabled={isPendingSave}
+          onClick={onSubmit}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[var(--accent-dark)] disabled:opacity-50"
+        >
+          {isPendingSave ? (
+            <>
+              <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <span>Đang lưu…</span>
+            </>
+          ) : (
+            <span>{product ? "Lưu thay đổi" : "Tạo sản phẩm"}</span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
-

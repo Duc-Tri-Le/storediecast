@@ -1,29 +1,23 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { useCustomRouter } from "./router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import { anyVariantOnSale, defaultVariant, variantPrice } from "./services/pricing";
-import { useCart } from "./services/useCart";
+import { defaultVariant, variantPrice } from "./services/pricing";
+import { useCart } from "./hooks/useCart";
 import { scrollToPageTop } from "./services/scroll";
 import type { Page, Product, ScaleFilter, VehicleFilter, Variant } from "./types";
 import { PRICE_RANGES, type PriceRangeKey, type SortKey } from "./data/filters";
 import type { PolicyKey } from "./data/policies";
-import { Header } from "./components/Header";
-import { Footer } from "./components/Footer";
-import { HomePage } from "./components/HomePage";
-import { CollectionPage } from "./components/CollectionPage";
-import { ProductsPage } from "./components/ProductsPage";
-import { ProductDetailPage } from "./components/ProductDetailPage";
-import { CartPage } from "./components/CartPage";
-import { CheckoutPage } from "./components/CheckoutPage";
-import { OrdersView } from "./components/OrdersView";
-import { FaqPage, AboutPage } from "./components/InfoPages";
-import { PolicyDialog } from "./components/PolicyDialog";
-import { ContactDialog } from "./components/ContactDialog";
-import { BuyNowDialog } from "./components/BuyNowDialog";
+import { Header, Footer } from "./components";
+import { StorefrontRouter } from "./components/StorefrontRouter";
+import { useStorefrontCatalog } from "./hooks/useStorefrontCatalog";
+import { AppOverlays } from "./components/AppOverlays";
 
 export function App() {
   const queryClient = useQueryClient();
-  const [page, setPage] = useState<Page>("home");
+  const { route, navigate } = useCustomRouter();
+  const page = route.page;
+  const setPage = (p: Page) => navigate(p);
   const [scale, setScale] = useState<ScaleFilter>("all");
   const [vehicle, setVehicle] = useState<VehicleFilter>("all");
   const [brand, setBrand] = useState<string>("all");
@@ -62,17 +56,41 @@ export function App() {
       }),
   });
 
+  // Khi chuyển trang trên web khách, tự động làm mới dữ liệu từ server
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ["products"] });
+    void queryClient.invalidateQueries({ queryKey: ["orders"] });
+    void queryClient.invalidateQueries({ queryKey: ["collections"] });
+    void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+  }, [page, queryClient]);
+
   const allProducts = allProductsQ.data?.products ?? [];
+
+  const collectionsQ = useQuery({
+    queryKey: ["collections"],
+    queryFn: () => api.listCollections({}),
+  });
+  const allCollections = collectionsQ.data?.collections ?? [];
+
+  const catalogQ = useQuery({
+    queryKey: ["catalog"],
+    queryFn: () => api.listCatalog({}),
+  });
+  const catalogData = catalogQ.data;
 
   const cartState = useCart(allProducts, (msg) => setToast(msg));
 
-  const brandOptions = useMemo(() => {
-    const seen: string[] = [];
-    for (const p of allProducts) {
-      if (!seen.includes(p.brand)) seen.push(p.brand);
+  // Đồng bộ bộ lọc và trang từ đường dẫn URL khi tải trang hoặc điều hướng
+  useEffect(() => {
+    if (route.page === "products") {
+      if (route.scale && route.scale !== scale) setScale(route.scale);
+      if (route.vehicle && route.vehicle !== vehicle) setVehicle(route.vehicle);
+      if (route.brand && route.brand !== brand) setBrand(route.brand);
+      if (route.search !== undefined && route.search !== search) setSearch(route.search);
+      if (route.sort && route.sort !== sort) setSort(route.sort);
+      if (route.priceRange && route.priceRange !== priceRange) setPriceRange(route.priceRange);
     }
-    return seen;
-  }, [allProducts]);
+  }, [route.page, route.scale, route.vehicle, route.brand, route.search, route.sort, route.priceRange]);
 
   const hasActiveFilters =
     scale !== "all" ||
@@ -91,16 +109,6 @@ export function App() {
     setSort("featured");
   }
 
-  const featured = useMemo(
-    () => allProducts.filter((p) => p.isFeatured),
-    [allProducts],
-  );
-  const newest = useMemo(
-    () => [...allProducts].sort((a, b) => b.id - a.id).slice(0, 8),
-    [allProducts],
-  );
-  const onSale = useMemo(() => allProducts.filter((p) => anyVariantOnSale(p)), [allProducts]);
-
   function goProductsWithScale(s: ScaleFilter) {
     setScale(s);
     setVehicle("all");
@@ -108,7 +116,7 @@ export function App() {
     setPriceRange("all");
     setSort("featured");
     setSearch("");
-    setPage("products");
+    navigate({ page: "products", scale: s, vehicle: "all", brand: "all", priceRange: "all", sort: "featured", search: "", pageNumber: 1 });
   }
 
   function goProductsWithVehicle(v: VehicleFilter) {
@@ -118,7 +126,7 @@ export function App() {
     setPriceRange("all");
     setSort("featured");
     setSearch("");
-    setPage("products");
+    navigate({ page: "products", scale: "all", vehicle: v, brand: "all", priceRange: "all", sort: "featured", search: "", pageNumber: 1 });
   }
 
   function goProductsWithBrand(b: string) {
@@ -128,7 +136,7 @@ export function App() {
     setPriceRange("all");
     setSort("featured");
     setSearch("");
-    setPage("products");
+    navigate({ page: "products", scale: "all", vehicle: "all", brand: b, priceRange: "all", sort: "featured", search: "", pageNumber: 1 });
   }
 
   function openDetail(p: Product, priceHint?: PriceRangeKey) {
@@ -142,12 +150,53 @@ export function App() {
     }
     setDetailVariantId(hintVariantId);
     setDetail(p);
-    setPage("product");
+    navigate({ page: "product", productId: p.id });
   }
+
+  useEffect(() => {
+    if (route.page === "product") {
+      const target = allProducts.find((p) =>
+        route.productId
+          ? p.id === route.productId
+          : route.productSlug
+            ? String(p.id) === route.productSlug || p.slug === route.productSlug
+            : false,
+      );
+      if (target) {
+        setDetail(target);
+        const expectedPath = `/products/${target.id}`;
+        if (typeof window !== "undefined" && window.location.pathname !== expectedPath) {
+          window.history.replaceState(null, "", expectedPath);
+        }
+      }
+    }
+  }, [route.page, route.productId, route.productSlug, allProducts]);
 
   const detailProduct: Product | null = detail
     ? (allProducts.find((p) => p.id === detail.id) ?? detail)
-    : null;
+    : (route.page === "product"
+      ? (allProducts.find((p) =>
+        route.productSlug
+          ? p.slug === route.productSlug || String(p.id) === route.productSlug
+          : p.id === route.productId,
+      ) ?? null)
+      : null);
+
+  const {
+    vehicleOptions,
+    scaleOptions,
+    brandOptions,
+    featured,
+    newest,
+    onSale,
+  } = useStorefrontCatalog({
+    catalogData,
+    allProducts,
+    allCollections,
+    route,
+    page,
+    detailProduct,
+  });
 
   const [buyNowTarget, setBuyNowTarget] = useState<{
     product: Product;
@@ -175,6 +224,8 @@ export function App() {
         onPickBrand={goProductsWithBrand}
         brandOptions={brandOptions}
         allProducts={allProducts}
+        collections={allCollections}
+        onNavigateCollection={(slug) => navigate(slug ? `/collections/${slug}` : "/collections")}
         search={search}
         onSearchChange={(v) => {
           setSearch(v);
@@ -184,159 +235,46 @@ export function App() {
         cartCount={cartState.cartCount}
       />
 
-      {page === "home" && (
-        <HomePage
-          featured={featured}
-          newest={newest}
-          onSale={onSale}
-          allProducts={allProducts}
-          loading={allProductsQ.isPending}
-          onOpenCollection={() => setPage("collection")}
-          onOpenProducts={() => goProductsWithScale("all")}
-          onPickScale={goProductsWithScale}
-          onPickVehicle={goProductsWithVehicle}
-          onPickBrand={goProductsWithBrand}
-          onDetail={openDetail}
-          onAdd={cartState.addToCart}
-          onBuyNow={(p) => buyNow(p, 1)}
-          onOpenFaq={() => setPage("faq")}
-        />
-      )}
-
-      {page === "collection" && (
-        <CollectionPage
-          allProducts={allProducts}
-          loading={allProductsQ.isPending}
-          onViewScale={goProductsWithScale}
-        />
-      )}
-
-      {page === "products" && (
-        <ProductsPage
-          allProducts={allProducts}
-          loading={allProductsQ.isPending}
-          error={allProductsQ.error != null}
-          onRetry={() => void allProductsQ.refetch()}
-          scale={scale}
-          onScaleChange={setScale}
-          vehicle={vehicle}
-          onVehicleChange={setVehicle}
-          brand={brand}
-          onBrandChange={setBrand}
-          brandOptions={brandOptions}
-          priceRange={priceRange}
-          onPriceRangeChange={setPriceRange}
-          sort={sort}
-          onSortChange={setSort}
-          search={search}
-          hasActiveFilters={hasActiveFilters}
-          onResetFilters={resetFilters}
-          hotProducts={featured.slice(0, 3)}
-          saleProducts={onSale.slice(0, 3)}
-          onDetail={(p) => openDetail(p, priceRange)}
-          onAdd={cartState.addToCart}
-          onBuyNow={(p) => buyNow(p, 1)}
-        />
-      )}
-
-      {page === "product" &&
-        (detailProduct ? (
-          <ProductDetailPage
-            key={detailProduct.id}
-            product={detailProduct}
-            initialVariantId={detailVariantId}
-            allProducts={allProducts}
-            onGoProducts={() => setPage("products")}
-            onViewAllRelated={() => goProductsWithScale(detailProduct.scale as ScaleFilter)}
-            onViewAllBestSelling={() => goProductsWithScale("all")}
-            onViewAllNewest={() => goProductsWithScale("all")}
-            onDetail={openDetail}
-            onAdd={cartState.addToCart}
-            onAddMany={cartState.addManyToCart}
-            onBuyNow={buyNow}
-          />
-        ) : (
-          <main className="mx-auto max-w-6xl px-4 pb-24 pt-6">
-            <p className="font-semibold">Chưa chọn sản phẩm nào để xem chi tiết.</p>
-            <button
-              type="button"
-              onClick={() => setPage("products")}
-              className="mt-4 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white"
-            >
-              Tới trang Sản phẩm
-            </button>
-          </main>
-        ))}
-
-      {page === "orders" && (
-        <OrdersView
-          onShop={() => setPage("products")}
-          invalidate={() => {
-            void queryClient.invalidateQueries({ queryKey: ["orders"] });
-            void queryClient.invalidateQueries({ queryKey: ["products"] });
-          }}
-        />
-      )}
-
-      {page === "cart" && (
-        <CartPage
-          items={cartState.cartItems}
-          subtotalBefore={cartState.cartSubtotalBefore}
-          bulkDiscount={cartState.cartBulkDiscount}
-          subtotal={cartState.cartSubtotal}
-          shipping={cartState.shipping}
-          totalQty={cartState.cartCount}
-          bulkPct={cartState.cartBulkPct}
-          couponCode={cartState.cartCouponCode}
-          couponDiscount={cartState.cartCouponDiscount}
-          subtotalAfterCoupon={cartState.cartSubtotalAfterCoupon}
-          onApplyCoupon={cartState.setCartCoupon}
-          onRemoveCoupon={() => cartState.setCartCoupon(null)}
-          onSetQty={cartState.setQty}
-          onContinueShopping={() => setPage("products")}
-          onCheckout={() => setPage("checkout")}
-          onDetail={openDetail}
-        />
-      )}
-
-      {page === "checkout" && (
-        <CheckoutPage
-          items={cartState.cartItems}
-          subtotalBefore={cartState.cartSubtotalBefore}
-          bulkDiscount={cartState.cartBulkDiscount}
-          subtotal={cartState.cartSubtotal}
-          shipping={cartState.shipping}
-          totalQty={cartState.cartCount}
-          bulkPct={cartState.cartBulkPct}
-          couponCode={cartState.cartCouponCode}
-          couponDiscount={cartState.cartCouponDiscount}
-          subtotalAfterCoupon={cartState.cartSubtotalAfterCoupon}
-          onApplyCoupon={cartState.setCartCoupon}
-          onRemoveCoupon={() => cartState.setCartCoupon(null)}
-          onBackToCart={() => setPage("cart")}
-          onShop={() => setPage("products")}
-          onPlaced={() => {
-            cartState.clearCart();
-            void queryClient.invalidateQueries({ queryKey: ["products"] });
-            void queryClient.invalidateQueries({ queryKey: ["orders"] });
-          }}
-        />
-      )}
-
-      {page === "faq" && (
-        <FaqPage
-          onOpenOrders={() => setPage("orders")}
-          onOpenProducts={() => goProductsWithScale("all")}
-        />
-      )}
-
-      {page === "about" && (
-        <AboutPage
-          onOpenProducts={() => goProductsWithScale("all")}
-          onOpenCollection={() => setPage("collection")}
-          onPickScale={goProductsWithScale}
-        />
-      )}
+      <StorefrontRouter
+        page={page}
+        route={route}
+        allProducts={allProducts}
+        allCollections={allCollections}
+        allProductsPending={allProductsQ.isPending}
+        allProductsError={allProductsQ.error != null}
+        collectionsPending={collectionsQ.isPending}
+        refetchProducts={() => void allProductsQ.refetch()}
+        cartState={cartState}
+        featured={featured}
+        newest={newest}
+        onSale={onSale}
+        vehicleOptions={vehicleOptions}
+        scaleOptions={scaleOptions}
+        brandOptions={brandOptions}
+        scale={scale}
+        setScale={setScale}
+        vehicle={vehicle}
+        setVehicle={setVehicle}
+        brand={brand}
+        setBrand={setBrand}
+        priceRange={priceRange}
+        setPriceRange={setPriceRange}
+        sort={sort}
+        setSort={setSort}
+        search={search}
+        setSearch={setSearch}
+        hasActiveFilters={hasActiveFilters}
+        resetFilters={resetFilters}
+        goProductsWithScale={goProductsWithScale}
+        goProductsWithVehicle={goProductsWithVehicle}
+        goProductsWithBrand={goProductsWithBrand}
+        openDetail={openDetail}
+        buyNow={buyNow}
+        setPage={setPage}
+        navigate={navigate}
+        detailProduct={detailProduct}
+        detailVariantId={detailVariantId}
+      />
 
       <Footer
         onNavigate={setPage}
@@ -345,48 +283,17 @@ export function App() {
         onScrollTop={() => scrollToPageTop("smooth")}
       />
 
-      {toast && (
-        <div
-          role="status"
-          className="fixed inset-x-0 bottom-20 z-50 mx-auto w-fit max-w-[92vw] rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
-        >
-          {toast}
-        </div>
-      )}
-
-      {policy && (
-        <PolicyDialog policyKey={policy} onClose={() => setPolicy(null)} />
-      )}
-
-      {contactOpen && (
-        <ContactDialog
-          onClose={() => setContactOpen(false)}
-          onOpenFaq={() => {
-            setContactOpen(false);
-            setPage("faq");
-          }}
-          onOpenOrders={() => {
-            setContactOpen(false);
-            setPage("orders");
-          }}
-        />
-      )}
-
-      {buyNowTarget && (
-        <BuyNowDialog
-          key={`${buyNowTarget.product.id}:${buyNowTarget.variantId ?? "default"}:${buyNowTarget.qty}`}
-          product={
-            allProducts.find((p) => p.id === buyNowTarget.product.id) ?? buyNowTarget.product
-          }
-          initialVariantId={buyNowTarget.variantId}
-          initialQty={buyNowTarget.qty}
-          onClose={() => setBuyNowTarget(null)}
-          onPlaced={() => {
-            void queryClient.invalidateQueries({ queryKey: ["products"] });
-            void queryClient.invalidateQueries({ queryKey: ["orders"] });
-          }}
-        />
-      )}
+      <AppOverlays
+        toast={toast}
+        policy={policy}
+        setPolicy={setPolicy}
+        contactOpen={contactOpen}
+        setContactOpen={setContactOpen}
+        setPage={setPage}
+        buyNowTarget={buyNowTarget}
+        setBuyNowTarget={setBuyNowTarget}
+        allProducts={allProducts}
+      />
     </div>
   );
 }

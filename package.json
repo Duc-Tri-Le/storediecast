@@ -1,0 +1,16 @@
+{
+  "dependencies": {},
+  "devDependencies": {
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.3"
+  },
+  "scripts": {
+    "build": "bun --cwd admin build && bun --cwd custom build",
+    "build:all": "bun --cwd admin build && bun --cwd custom build",
+    "build:admin": "bun --cwd admin build",
+    "build:custom": "bun --cwd custom build",
+    "watch:admin": "bun --cwd admin build:watch",
+    "watch": "bun --cwd admin build:watch"
+  }
+}

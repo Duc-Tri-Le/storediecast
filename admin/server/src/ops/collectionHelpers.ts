@@ -4,6 +4,7 @@ import {
   type CollectionCondition,
   type Row,
   type ThumbnailOption,
+  nullableStr,
   num,
   str,
 } from "./dbCommon";
@@ -186,6 +187,62 @@ export function checkProductIds(
   return { ids };
 }
 
+export function conditionsSignature(conds: CollectionCondition[]): string {
+  return conds
+    .filter((c) => c.value && c.value.trim())
+    .map((c) => `${c.kind}:${c.operator}:${c.value.trim().toLowerCase()}`)
+    .sort()
+    .join("&&");
+}
+
+export function checkDuplicateCollectionConditions(
+  db: Database,
+  conditions: CollectionCondition[],
+  excludeId?: number,
+): { message: string; duplicateTitle: string } | null {
+  const validConds = conditions.filter((c) => c.value && c.value.trim());
+  if (validConds.length === 0) return null;
+
+  const currentSig = conditionsSignature(validConds);
+
+  const all = db
+    .query("SELECT id, title, kind, conditions, base_scale FROM collections")
+    .all() as Row[];
+
+  for (const col of all) {
+    const colId = num(col.id);
+    if (excludeId && colId === excludeId) continue;
+    const colTitle = str(col.title);
+    const colBaseScale = nullableStr(col.base_scale);
+    const otherConds = parseConditions(col.conditions).filter((c) => c.value && c.value.trim());
+
+    // 1. Kiểm tra nếu bộ hiện tại có TẬP ĐIỀU KIỆN GIỐNG HỆT bộ khác
+    if (otherConds.length === validConds.length && otherConds.length > 0) {
+      const otherSig = conditionsSignature(otherConds);
+      if (currentSig === otherSig) {
+        return {
+          message: `Bộ sưu tập này có cùng bộ điều kiện lọc giống hệt bộ sưu tập “${colTitle}”.`,
+          duplicateTitle: colTitle,
+        };
+      }
+    }
+
+    // 2. Kiểm tra bộ theo tỉ lệ gốc (base_scale):
+    const first = validConds[0];
+    if (validConds.length === 1 && first && first.kind === "scale" && first.operator === "eq") {
+      const scaleVal = first.value.trim().toLowerCase();
+      if (colBaseScale && colBaseScale.trim().toLowerCase() === scaleVal) {
+        return {
+          message: `Tỉ lệ “${first.value}” đã có bộ sưu tập theo tỉ lệ riêng là “${colTitle}”. Đổi bộ này sang tỉ lệ “${first.value}” sẽ trùng với bộ đó.`,
+          duplicateTitle: colTitle,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 export type CollectionDetailInput = {
   description?: string;
   matchMode?: string;
@@ -194,4 +251,5 @@ export type CollectionDetailInput = {
   thumbnailConfig?: unknown;
   seoTitle?: string;
   seoDescription?: string;
+  slug?: string;
 };

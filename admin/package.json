@@ -6,7 +6,9 @@
     "start": "bun run server.ts",
     "dev": "bun run server.ts",
     "build": "bun ./client/build.mjs",
-    "typecheck": "tsc --noEmit -p client/tsconfig.json && tsc --noEmit -p server/tsconfig.json"
+    "typecheck": "tsc --noEmit -p client/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "build:watch": "bun ./client/build.mjs --watch",
+    "watch": "bun ./client/build.mjs --watch"
   },
   "dependencies": {
     "@tanstack/react-query": "5.100.10",
@@ -15,9 +17,11 @@
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "recharts": "2.15.3",
+    "xlsx": "^0.18.5",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/bun": "1.4.2",
     "@types/node": "^22.0.0",

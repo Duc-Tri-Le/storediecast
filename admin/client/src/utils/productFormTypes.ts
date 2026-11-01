@@ -38,6 +38,9 @@ export type ProductFormShape = {
   isFeatured: boolean;
   description: string;
   tags: string[];
+  slug: string;
+  seoTitle: string;
+  seoDescription: string;
   variants: PersistedVariantShape[];
 };
 
@@ -72,9 +75,9 @@ export function emptyDraftVariant(): DraftVariant {
     colorName: "",
     price: "",
     promoPrice: "",
-    stock: "0",
+    stock: "10",
     sku: null,
-    imageMode: "link",
+    imageMode: "catalog",
     catalogKey: "scale132",
     linkUrl: "",
     linkState: "idle",
@@ -133,6 +136,9 @@ export function productShapeFromProduct(p: Product): ProductFormShape {
       .split("·")
       .map((t) => t.trim())
       .filter(Boolean),
+    slug: (p as any).slug ?? "",
+    seoTitle: (p as any).seoTitle ?? "",
+    seoDescription: (p as any).seoDescription ?? "",
     variants: [...p.variants]
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map(persistedVariantFromProductVariant),
@@ -232,10 +238,10 @@ export function emptyAddVariant(): AddVariant {
     sellPrice: "",
     compareAt: "",
     costPrice: "",
-    stock: "0",
+    stock: "10",
     barcode: "",
     variantTag: "",
-    imageMode: "link",
+    imageMode: "catalog",
     catalogKey: "scale132",
     linkUrl: "",
     linkState: "idle",

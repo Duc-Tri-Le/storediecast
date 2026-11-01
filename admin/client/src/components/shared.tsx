@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Page, Product } from "../types";
-import { colorHex, defaultVariant, directImageSrc } from "../utils/format";
+import { defaultVariant, directImageSrc } from "../utils/format";
 
 export function SafeAreaTopScrim(_props?: { backgroundColor?: string }) {
   return null;
@@ -18,6 +18,43 @@ export const smallBtn =
 
 export const editLink = "text-sm font-medium text-[var(--accent)]";
 
+export function BackButton({
+  label,
+  onClick,
+  ariaLabel,
+  className = "",
+}: {
+  label: string;
+  onClick: () => void;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel || `Quay lại ${label}`}
+      className={`group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold tracking-wider text-[var(--dim)] uppercase transition-colors hover:bg-[var(--sidebar)] hover:text-[var(--text)] ${className}`}
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="transition-transform group-hover:-translate-x-0.5"
+      >
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function Thumb({ product, size = 44 }: { product: Product; size?: number }) {
   const dv = defaultVariant(product);
   const src = dv ? directImageSrc(dv.imageKey) : null;
@@ -27,7 +64,7 @@ export function Thumb({ product, size = 44 }: { product: Product; size?: number 
         src={src}
         alt={`Ảnh ${product.name}`}
         loading="lazy"
-        className="shrink-0 rounded-md border border-[var(--border)] object-cover"
+        className="shrink-0 rounded-md border border-[var(--border)] object-cover shadow-2xs"
         style={{ width: size, height: size }}
       />
     );
@@ -35,24 +72,25 @@ export function Thumb({ product, size = 44 }: { product: Product; size?: number 
   return (
     <div
       aria-hidden
-      className="flex shrink-0 flex-col items-center justify-center rounded-md border border-[var(--border)]"
+      className="flex shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] text-[var(--dim)]"
       style={{
         width: size,
         height: size,
-        background: `linear-gradient(135deg, ${colorHex(dv?.colorName ?? "")}33, ${colorHex(dv?.colorName ?? "")}11)`,
       }}
     >
-      <span
-        className="block rounded-full border border-black/10"
-        style={{
-          width: size * 0.36,
-          height: size * 0.36,
-          background: colorHex(dv?.colorName ?? ""),
-        }}
-      />
-      <span className="mt-0.5 text-[9px] font-semibold text-[var(--dim)]">
-        {product.scale}
-      </span>
+      <svg
+        className="h-5 w-5 opacity-40"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path d="M21 15l-5-5L5 21" />
+      </svg>
     </div>
   );
 }

@@ -1,85 +1,22 @@
 import type { Product } from "../types";
-import type { CollectionCondition, ConditionKind, MatchMode } from "../utils/collectionRules";
+import type { CollectionCondition, MatchMode } from "../utils/collectionRules";
 import {
   CONDITION_KIND_LABELS,
   CONDITION_OPERATOR_LABELS_EN,
 } from "../utils/collectionRules";
 import { defaultVariant, fmtVND } from "../utils/format";
-import { Icon, ICONS } from "./shared";
+import { Icon, ICONS, Thumb } from "./shared";
 
-export type BulkActionType = "price" | "promoPrice" | "stock" | "description";
-export type BulkMode = "set" | "add" | "subtract" | "percentAdd" | "percentSubtract" | "clear";
-export type BulkActionDraft = { type: BulkActionType; mode: BulkMode; value: string; text: string };
-
-export const BULK_ACTION_TYPE_LABELS: Record<BulkActionType, string> = {
-  price: "Đổi giá bán",
-  promoPrice: "Đổi giá khuyến mãi",
-  stock: "Đổi tồn kho",
-  description: "Đổi mô tả",
-};
-
-export const BULK_FIELD_ORDER: ConditionKind[] = ["vehicleType", "brand", "modelMaker", "scale", "tag"];
-
-export function bulkModesFor(type: BulkActionType): Array<{ value: BulkMode; label: string }> {
-  switch (type) {
-    case "price":
-      return [
-        { value: "set", label: "Đặt thành" },
-        { value: "add", label: "Cộng thêm" },
-        { value: "subtract", label: "Trừ đi" },
-        { value: "percentAdd", label: "Tăng theo %" },
-        { value: "percentSubtract", label: "Giảm theo %" },
-      ];
-    case "promoPrice":
-      return [
-        { value: "set", label: "Đặt thành" },
-        { value: "add", label: "Cộng thêm" },
-        { value: "subtract", label: "Trừ đi" },
-        { value: "percentAdd", label: "Tăng theo %" },
-        { value: "percentSubtract", label: "Giảm theo %" },
-        { value: "clear", label: "Xóa giá khuyến mãi" },
-      ];
-    case "stock":
-      return [
-        { value: "set", label: "Đặt thành" },
-        { value: "add", label: "Cộng thêm" },
-        { value: "subtract", label: "Trừ đi" },
-      ];
-    default:
-      return [{ value: "set", label: "Đặt thành" }];
-  }
-}
-
-export function bulkActionLine(a: { type: string; mode: string; value: number | null; text: string }): string {
-  const type = (BULK_ACTION_TYPE_LABELS[a.type as BulkActionType] ? a.type : "price") as BulkActionType;
-  const label = BULK_ACTION_TYPE_LABELS[type];
-  if (type === "description") {
-    const t = a.text.length > 120 ? `${a.text.slice(0, 120)}…` : a.text;
-    return `${label}: “${t}”`;
-  }
-  if (a.mode === "clear") return `${label}: xóa giá khuyến mãi`;
-  const modeLabel = bulkModesFor(type).find((m) => m.value === a.mode)?.label ?? a.mode;
-  const v = a.value ?? 0;
-  const valStr =
-    a.mode === "percentAdd" || a.mode === "percentSubtract"
-      ? `${v}%`
-      : type === "stock"
-        ? `${v} chiếc`
-        : fmtVND(v);
-  return `${label}: ${modeLabel} ${valStr}`;
-}
-
-export function bulkDraftActionLine(a: BulkActionDraft): string {
-  return bulkActionLine({
-    type: a.type,
-    mode: a.mode,
-    value: a.mode === "clear" ? null : Number(a.value),
-    text: a.text,
-  });
-}
-
-export const selectCls =
-  "rounded-lg border border-[var(--border)] bg-white px-2.5 py-2 text-sm outline-none focus:border-[var(--accent)]";
+export type { BulkActionType, BulkMode, BulkActionDraft } from "../utils/bulkTypes";
+export {
+  BULK_ACTION_TYPE_LABELS,
+  BULK_FIELD_ORDER,
+  bulkModesFor,
+  bulkActionLine,
+  bulkDraftActionLine,
+  selectCls,
+} from "../utils/bulkTypes";
+import { type BulkActionDraft, bulkDraftActionLine } from "../utils/bulkTypes";
 
 export function BulkUpdatePreviewModal({
   matchMode,
@@ -104,132 +41,202 @@ export function BulkUpdatePreviewModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-[#0a2c50]/50 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#07192f]/60 p-3 backdrop-blur-xs sm:items-center sm:p-5"
       role="dialog"
       aria-modal="true"
       aria-label="Xem trước cập nhật hàng loạt"
     >
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_24px_60px_-24px_rgba(10,44,80,0.45)]">
-        <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-5 py-4">
-          <h2 className="text-xl font-bold tracking-tight">Xem trước cập nhật hàng loạt</h2>
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_25px_60px_-15px_rgba(7,25,47,0.4)]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--table-head)] px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Icon
+                d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"
+                size={20}
+              />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-[var(--text)]">
+                Xem trước cập nhật hàng loạt
+              </h2>
+              <p className="text-xs text-[var(--dim)]">
+                Kiểm tra kỹ danh sách sản phẩm và các thay đổi trước khi áp dụng
+              </p>
+            </div>
+          </div>
           <button
             type="button"
-            aria-label="Đóng xem trước cập nhật hàng loạt"
+            aria-label="Đóng xem trước"
             disabled={isPending}
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-lg leading-none text-[var(--dim)] hover:bg-[var(--sidebar)] hover:text-[var(--text)] disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--dim)] transition-colors hover:bg-[var(--sidebar)] hover:text-[var(--text)] disabled:opacity-50"
           >
-            ×
+            <Icon d={ICONS.close} size={18} />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">
-          <p className="rounded-lg bg-[#eef3f8] px-4 py-3 text-sm leading-6">
-            Danh sách dưới đây là các sản phẩm khớp theo các điều kiện ở phần Bộ lọc. Số
-            sản phẩm được cập nhật thực tế có thể khác nhau tùy theo các hành động bạn
-            muốn cập nhật.
-          </p>
 
-          <section aria-label="Bộ lọc xem trước" className="mt-5">
-            <h3 className="text-base font-bold">Bộ lọc</h3>
-            <p className="mt-2 text-sm">
-              {matchMode === "all"
-                ? "Sản phẩm khớp TẤT CẢ các điều kiện dưới đây:"
-                : "Sản phẩm khớp BẤT KỲ điều kiện nào dưới đây:"}
+        {/* Modal Body */}
+        <div className="overflow-y-auto px-6 py-5">
+          {/* Thông tin cảnh báo thân thiện */}
+          <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-[#eef6ff] p-4 text-sm leading-relaxed text-[#144d82]">
+            <span className="mt-0.5 text-[var(--accent)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
+            <p>
+              Hệ thống sẽ cập nhật trực tiếp vào cơ sở dữ liệu chung của cả web quản trị và web bán hàng. Hãy rà soát danh sách sản phẩm khớp bên dưới.
             </p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm">
-              {validConditions.map((c, i) => (
-                <li key={i}>
-                  {CONDITION_KIND_LABELS[c.kind]}{" "}
-                  {CONDITION_OPERATOR_LABELS_EN[c.operator]} “{c.value}”
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-sm text-[var(--dim)]">
-              Cập nhật cho:{" "}
-              {variantMustMatch
-                ? "Biến thể khớp điều kiện"
-                : "Tất cả biến thể của sản phẩm khớp"}
-            </p>
-          </section>
+          </div>
 
-          <section
-            aria-label="Hành động xem trước"
-            className="mt-5 border-t border-[var(--border)] pt-4"
-          >
-            <h3 className="text-base font-bold">Hành động</h3>
-            <p className="mt-2 text-sm">
-              Các hành động dưới đây sẽ được thực hiện theo thứ tự từ trên xuống dưới:
-            </p>
-            <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-sm">
-              {bulkActions.map((a, i) => (
-                <li key={i}>{bulkDraftActionLine(a)}</li>
-              ))}
-            </ol>
-          </section>
-
-          <section
-            aria-label="Sản phẩm khớp mẫu"
-            className="mt-5 border-t border-[var(--border)] pt-4"
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-base font-bold">Sản phẩm khớp mẫu</h3>
-              {matchedProducts.length > 0 && (
-                <p className="text-sm text-[var(--dim)]">
-                  {matchedProducts.length} sản phẩm · {matchedVariantCount} biến thể
-                </p>
-              )}
+          {/* Grid 2 cột tóm tắt Điều kiện & Hành động */}
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Cột 1: Điều kiện lọc */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--sidebar)] p-4">
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2.5">
+                <h3 className="text-xs font-bold tracking-wider text-[var(--dim)] uppercase">
+                  Điều kiện lọc
+                </h3>
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)] shadow-xs">
+                  {matchMode === "all" ? "Khớp tất cả (VÀ)" : "Khớp bất kỳ (HOẶC)"}
+                </span>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {validConditions.map((c, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-medium text-[var(--text)] shadow-xs"
+                  >
+                    <span className="rounded bg-[var(--sidebar)] px-1.5 py-0.5 font-bold text-[var(--dim)]">
+                      {CONDITION_KIND_LABELS[c.kind]}
+                    </span>
+                    <span className="text-[var(--dim)]">
+                      {CONDITION_OPERATOR_LABELS_EN[c.operator]}
+                    </span>
+                    <strong className="truncate font-semibold text-[var(--accent)]">
+                      "{c.value}"
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-[var(--dim)]">
+                Phạm vi áp dụng:{" "}
+                <span className="font-semibold text-[var(--text)]">
+                  {variantMustMatch
+                    ? "Chỉ các biến thể khớp điều kiện"
+                    : "Toàn bộ biến thể của sản phẩm khớp"}
+                </span>
+              </p>
             </div>
+
+            {/* Cột 2: Hành động thay đổi */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--sidebar)] p-4">
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2.5">
+                <h3 className="text-xs font-bold tracking-wider text-[var(--dim)] uppercase">
+                  Hành động sẽ thực hiện
+                </h3>
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#14663c] shadow-xs">
+                  {bulkActions.length} thao tác
+                </span>
+              </div>
+              <ol className="mt-3 space-y-2">
+                {bulkActions.map((a, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-xs font-medium text-[var(--text)] shadow-xs"
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--accent)]">
+                      {i + 1}
+                    </span>
+                    <span className="leading-tight">{bulkDraftActionLine(a)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+
+          {/* Danh sách sản phẩm khớp */}
+          <section aria-label="Sản phẩm khớp mẫu" className="mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-[var(--text)]">Danh sách sản phẩm khớp</h3>
+                <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--accent)]">
+                  {matchedProducts.length} sản phẩm
+                </span>
+                <span className="rounded-full bg-[var(--sidebar)] px-2.5 py-0.5 text-xs font-semibold text-[var(--dim)]">
+                  {matchedVariantCount} biến thể
+                </span>
+              </div>
+            </div>
+
             {matchedProducts.length === 0 ? (
-              <div className="px-4 py-10 text-center">
-                <div className="flex justify-center text-[#b9c9dc]">
-                  <Icon d={ICONS.products} size={52} />
+              <div className="my-6 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--sidebar)] px-4 py-12 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#94a9c2] shadow-xs">
+                  <Icon d={ICONS.products} size={28} />
                 </div>
-                <p className="mt-3 text-lg font-bold">Không có sản phẩm nào khớp</p>
-                <p className="mt-1 text-sm text-[var(--dim)]">
-                  Thử thay đổi bộ lọc để khớp thêm sản phẩm.
+                <p className="mt-3 text-base font-bold text-[var(--text)]">
+                  Không tìm thấy sản phẩm nào khớp
+                </p>
+                <p className="mt-1 text-xs text-[var(--dim)]">
+                  Vui lòng điều chỉnh lại bộ lọc điều kiện ở bước trước.
                 </p>
               </div>
             ) : (
               <>
-                <div className="mt-3 hidden overflow-hidden rounded-xl border border-[var(--border)] sm:block">
+                {/* Desktop View Table */}
+                <div className="mt-3 hidden max-h-80 overflow-y-auto rounded-xl border border-[var(--border)] sm:block">
                   <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border)] bg-[var(--table-head)] text-[var(--dim)]">
-                        <th className="px-4 py-2.5 font-medium">Sản phẩm</th>
-                        <th className="w-28 px-4 py-2.5 font-medium">Loại xe</th>
-                        <th className="w-32 px-4 py-2.5 font-medium">Hãng xe</th>
-                        <th className="w-20 px-4 py-2.5 font-medium">Tỉ lệ</th>
-                        <th className="w-36 px-4 py-2.5 font-medium">Giá hiện tại</th>
+                    <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--table-head)] text-xs font-semibold tracking-wider text-[var(--dim)] uppercase">
+                      <tr>
+                        <th className="px-4 py-3">Sản phẩm</th>
+                        <th className="w-28 px-4 py-3">Loại xe</th>
+                        <th className="w-32 px-4 py-3">Hãng xe</th>
+                        <th className="w-24 px-4 py-3">Tỉ lệ</th>
+                        <th className="w-36 px-4 py-3 text-right">Giá hiện tại</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-[var(--border)] bg-white">
                       {matchedProducts.map((p) => {
                         const dv = defaultVariant(p);
                         return (
-                          <tr
-                            key={p.id}
-                            className="border-b border-[var(--border)] last:border-0 align-top"
-                          >
-                            <td className="px-4 py-2.5 font-medium">{p.name}</td>
-                            <td className="px-4 py-2.5">{p.vehicleType}</td>
-                            <td className="px-4 py-2.5">{p.brand}</td>
-                            <td className="px-4 py-2.5">{p.scale}</td>
-                            <td className="px-4 py-2.5 whitespace-nowrap">
+                          <tr key={p.id} className="transition-colors hover:bg-[var(--sidebar)]">
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-3">
+                                <Thumb product={p} size={38} />
+                                <div>
+                                  <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                                  <p className="text-xs text-[var(--dim)]">Mã #{p.id}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className="rounded bg-[var(--sidebar)] px-2 py-0.5 text-xs font-medium text-[var(--dim)]">
+                                {p.vehicleType}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-medium text-[var(--text)]">
+                              {p.brand}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-bold text-[var(--dim)]">
+                              {p.scale}
+                            </td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
                               {dv ? (
                                 dv.promoPrice != null ? (
-                                  <>
-                                    <span className="font-semibold">
+                                  <div>
+                                    <span className="font-bold text-[#b45309]">
                                       {fmtVND(dv.promoPrice)}
                                     </span>
-                                    <span className="block text-xs text-[var(--dim)] line-through">
+                                    <span className="block text-[11px] text-[var(--dim)] line-through">
                                       {fmtVND(dv.price)}
                                     </span>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <span className="font-semibold">{fmtVND(dv.price)}</span>
+                                  <span className="font-bold text-[var(--text)]">
+                                    {fmtVND(dv.price)}
+                                  </span>
                                 )
                               ) : (
-                                "—"
+                                <span className="text-[var(--dim)]">—</span>
                               )}
                             </td>
                           </tr>
@@ -238,34 +245,40 @@ export function BulkUpdatePreviewModal({
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] sm:hidden">
+
+                {/* Mobile View List */}
+                <div className="mt-3 divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] bg-white sm:hidden">
                   {matchedProducts.map((p) => {
                     const dv = defaultVariant(p);
                     return (
-                      <div key={p.id} className="px-4 py-3">
-                        <p className="text-sm font-semibold">{p.name}</p>
-                        <p className="mt-0.5 text-sm text-[var(--dim)]">
-                          {p.vehicleType} · {p.brand} · Tỉ lệ {p.scale}
-                        </p>
-                        <p className="mt-0.5 text-sm">
-                          Giá hiện tại:{" "}
-                          {dv ? (
-                            dv.promoPrice != null ? (
-                              <>
-                                <span className="font-semibold">
-                                  {fmtVND(dv.promoPrice)}
-                                </span>{" "}
-                                <span className="text-xs text-[var(--dim)] line-through">
+                      <div key={p.id} className="flex items-center gap-3 p-3">
+                        <Thumb product={p} size={44} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-sm text-[var(--text)]">{p.name}</p>
+                          <p className="mt-0.5 text-xs text-[var(--dim)]">
+                            {p.vehicleType} · {p.brand} · {p.scale}
+                          </p>
+                          <div className="mt-1">
+                            {dv ? (
+                              dv.promoPrice != null ? (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-bold text-[#b45309]">
+                                    {fmtVND(dv.promoPrice)}
+                                  </span>
+                                  <span className="text-[var(--dim)] line-through">
+                                    {fmtVND(dv.price)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs font-bold text-[var(--text)]">
                                   {fmtVND(dv.price)}
                                 </span>
-                              </>
+                              )
                             ) : (
-                              <span className="font-semibold">{fmtVND(dv.price)}</span>
-                            )
-                          ) : (
-                            "—"
-                          )}
-                        </p>
+                              <span className="text-xs text-[var(--dim)]">—</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -274,23 +287,46 @@ export function BulkUpdatePreviewModal({
             )}
           </section>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] px-5 py-4">
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={onClose}
-            className="rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium hover:bg-[var(--sidebar)] disabled:opacity-50"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="button"
-            disabled={matchedProducts.length === 0 || isPending}
-            onClick={onApply}
-            className="rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {isPending ? "Đang áp dụng…" : "Áp dụng cập nhật hàng loạt"}
-          </button>
+
+        {/* Modal Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--table-head)] px-6 py-4">
+          <div className="text-xs text-[var(--dim)]">
+            {matchedProducts.length > 0 ? (
+              <span>
+                Áp dụng cho <strong className="text-[var(--text)]">{matchedProducts.length}</strong> sản phẩm ({matchedVariantCount} biến thể)
+              </span>
+            ) : (
+              <span>Không thể áp dụng khi chưa khớp sản phẩm</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={onClose}
+              className="rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-xs transition-colors hover:bg-[var(--sidebar)] disabled:opacity-50"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              disabled={matchedProducts.length === 0 || isPending}
+              onClick={onApply}
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPending ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span>Đang áp dụng…</span>
+                </>
+              ) : (
+                <>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>Áp dụng cập nhật</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

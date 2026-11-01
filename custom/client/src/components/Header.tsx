@@ -1,15 +1,11 @@
-import { useEffect, useRef, useState } from "react";
 import { avatarImg } from "../data/maps";
 import { NAV_ITEMS, type NavItem } from "../data/collections";
-import type { Page, Product, ScaleFilter } from "../types";
+import type { Page, Product, ScaleFilter, ShopCollection } from "../types";
 
 export function Header({
   page,
   onNavigate,
-  onPickScale,
-  onPickBrand,
-  brandOptions,
-  allProducts,
+  onNavigateCollection,
   search,
   onSearchChange,
   onSearchSubmit,
@@ -17,199 +13,49 @@ export function Header({
 }: {
   page: Page;
   onNavigate: (p: Page) => void;
-  onPickScale: (s: ScaleFilter) => void;
-  onPickBrand: (b: string) => void;
-  brandOptions: string[];
-  allProducts: Product[];
+  onPickScale?: (s: ScaleFilter) => void;
+  onPickBrand?: (b: string) => void;
+  brandOptions?: string[];
+  allProducts?: Product[];
+  collections?: ShopCollection[];
+  onNavigateCollection?: (slugOrPath: string) => void;
   search: string;
   onSearchChange: (v: string) => void;
   onSearchSubmit: () => void;
   cartCount: number;
 }) {
-  const [openMenu, setOpenMenu] = useState<"products" | "collection" | null>(null);
-  const headerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!openMenu) return;
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenMenu(null);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [openMenu]);
-
   const navButton = (item: NavItem, extraClass = "") => {
-    const isDrop = item.key === "products" || item.key === "collection";
-    const dropKey = item.key === "products" ? "products" : item.key === "collection" ? "collection" : null;
-    const expanded = dropKey != null && openMenu === dropKey;
+    const active = page === item.key;
     return (
       <button
         key={item.key}
         type="button"
         onClick={() => {
-          if (dropKey) {
-            setOpenMenu((prev) => (prev === dropKey ? null : dropKey));
+          if (item.key === "collection" && onNavigateCollection) {
+            onNavigateCollection("");
           } else {
-            setOpenMenu(null);
             onNavigate(item.key);
           }
         }}
-        aria-pressed={!isDrop ? page === item.key : undefined}
-        aria-haspopup={isDrop ? "true" : undefined}
-        aria-expanded={isDrop ? expanded : undefined}
-        aria-current={page === item.key ? "page" : undefined}
-        aria-label={
-          item.key === "products"
-            ? expanded
-              ? "Sản phẩm — đóng khung danh sách hãng xe"
-              : "Sản phẩm — mở khung danh sách hãng xe"
-            : item.key === "collection"
-              ? expanded
-                ? "Bộ sưu tập — đóng khung danh sách bộ sưu tập"
-                : "Bộ sưu tập — mở khung danh sách bộ sưu tập"
-              : undefined
-        }
-        className={`flex min-h-[44px] shrink-0 items-center justify-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold ${extraClass} ${
-          page === item.key || expanded ? "bg-[var(--dark)] text-white" : "text-[var(--dim)]"
+        aria-current={active ? "page" : undefined}
+        className={`flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-3.5 py-2 text-sm font-semibold transition ${extraClass} ${
+          active
+            ? "bg-[var(--dark)] text-white"
+            : "text-[var(--dim)] hover:text-[var(--text)] hover:bg-[var(--surface2)]"
         }`}
       >
         <span className="min-w-0">{item.label}</span>
-        {isDrop && (
-          <svg
-            aria-hidden
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        )}
       </button>
     );
   };
 
-  const dropSquare = (
-    <span
-      aria-hidden
-      className="inline-block h-3 w-3 shrink-0 rounded-[2px] border-[1.5px] border-current opacity-60"
-    />
-  );
-
-  const headerDropdown = openMenu && (
-    <div
-      className="absolute inset-x-0 top-full z-40 px-4 pb-2"
-      role="group"
-      aria-label={openMenu === "products" ? "Danh sách hãng xe" : "Danh sách bộ sưu tập"}
-    >
-      <div className="mx-auto max-w-6xl">
-        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-[0_18px_44px_rgba(20,16,10,0.22)]">
-          {openMenu === "products" ? (
-            <div className="p-3 sm:p-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onPickScale("all");
-                }}
-                aria-label="Tất cả sản phẩm — sang trang Sản phẩm không lọc"
-                className="flex w-full items-center gap-2.5 rounded-xl bg-[var(--surface2)] px-3 py-2.5 text-left text-[15px] font-bold transition hover:text-[var(--accent)]"
-              >
-                {dropSquare}
-                Tất cả sản phẩm
-                <span aria-hidden className="ml-auto text-[var(--dim)]">→</span>
-              </button>
-              {brandOptions.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-[var(--dim)]">Đang tải danh sách hãng xe…</p>
-              ) : (
-                <div className="mt-1 grid grid-cols-1 gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
-                  {brandOptions.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => {
-                        setOpenMenu(null);
-                        onPickBrand(b);
-                      }}
-                      aria-label={`Xem sản phẩm hãng ${b} — sang trang Sản phẩm đã lọc theo hãng ${b}`}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[15px] transition hover:bg-[var(--surface2)] hover:text-[var(--accent)]"
-                    >
-                      {dropSquare}
-                      <span className="min-w-0">{b}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-3 sm:p-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenMenu(null);
-                  onNavigate("collection");
-                }}
-                aria-label="Tất cả bộ sưu tập — sang trang Bộ sưu tập"
-                className="flex w-full items-center gap-2.5 rounded-xl bg-[var(--surface2)] px-3 py-2.5 text-left text-[15px] font-bold transition hover:text-[var(--accent)]"
-              >
-                {dropSquare}
-                Tất cả bộ sưu tập
-                <span aria-hidden className="ml-auto text-[var(--dim)]">→</span>
-              </button>
-              <div className="mt-1 grid grid-cols-1 gap-x-8">
-                {(["1:64", "1:32", "1:16"] as const).map((s) => {
-                  const count = allProducts.filter((p) => p.scale === s).length;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setOpenMenu(null);
-                        onPickScale(s);
-                      }}
-                      aria-label={`Bộ sưu tập tỉ lệ ${s} — sang trang Sản phẩm đã lọc theo tỉ lệ ${s}`}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[15px] transition hover:bg-[var(--surface2)] hover:text-[var(--accent)]"
-                    >
-                      {dropSquare}
-                      <span className="min-w-0 font-semibold">Bộ sưu tập tỉ lệ {s}</span>
-                      <span className="ml-auto shrink-0 text-sm tabular-nums text-[var(--dim)]">
-                        {count} mẫu
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <header ref={headerRef} className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/95 pt-safe backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/95 pt-safe backdrop-blur">
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex items-center gap-2 py-3">
           <button
             type="button"
-            onClick={() => {
-              setOpenMenu(null);
-              onNavigate("home");
-            }}
+            onClick={() => onNavigate("home")}
             aria-label="XE ĐỎ Model Shop — bấm để về trang chủ"
             className="shrink-0 rounded-full py-1 pr-1"
           >
@@ -258,10 +104,7 @@ export function Header({
             </form>
             <button
               type="button"
-              onClick={() => {
-                setOpenMenu(null);
-                onNavigate("cart");
-              }}
+              onClick={() => onNavigate("cart")}
               aria-label={
                 cartCount > 0
                   ? `Đi tới trang Giỏ hàng, ${cartCount} sản phẩm`
@@ -304,8 +147,6 @@ export function Header({
           )}
         </nav>
       </div>
-      {headerDropdown}
     </header>
   );
 }
-

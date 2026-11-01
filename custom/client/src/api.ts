@@ -10,6 +10,7 @@ export function createActionClient<T extends Record<string, any>>(): ActionClien
   return new Proxy({} as any, {
     get(_target, prop: string) {
       return async (args: any) => {
+        console.log(`🌐 [API Action] ${prop}:`, args);
         const res = await fetch("/actions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

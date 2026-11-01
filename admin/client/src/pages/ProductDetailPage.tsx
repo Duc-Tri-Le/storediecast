@@ -1,15 +1,14 @@
 import type { CatalogData, Product, ShopCollection } from "../types";
 import { emptyDraftVariant } from "../utils/productFormTypes";
-import { cardCls, smallBtn, UnsavedChangesBar } from "../components/shared";
+import { BackButton, UnsavedChangesBar } from "../components/shared";
 import {
-  ProductDetailMediaSection,
-  ProductDetailOrganizationSection,
+  ProductDetailMainInfoSection,
+  ProductDetailSeoSection,
+  ProductDetailSidebarSection,
 } from "../components/ProductDetailSections";
 import { ProductDetailVariantsSection } from "../components/ProductDetailVariants";
 import {
   ProductDetailPreviewSection,
-  ProductDetailTitleDescSection,
-  ProductDetailSeoSection,
   ProductDetailBottomBar,
 } from "../components/ProductDetailExtraSections";
 import { useProductDetailForm } from "../hooks/useProductDetailForm";
@@ -19,7 +18,7 @@ export function ProductDetailPage({
   allProducts,
   collections,
   catalog,
-  backLabel = "Sản phẩm",
+  backLabel = "Tất cả sản phẩm",
   onBack,
   onSaved,
   onDeleted,
@@ -39,64 +38,110 @@ export function ProductDetailPage({
     product,
     allProducts,
     collections,
+    catalog,
     onSaved,
     onDeleted,
     onDuplicated,
   });
 
   return (
-    <div>
+    <div className="space-y-4">
+      {/* Thanh lưu nổi khi có thay đổi */}
       <UnsavedChangesBar
         visible={form.isDirty}
         saving={form.saveMut.isPending}
         onSave={form.submit}
         onDiscard={form.discardChanges}
       />
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1 rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--dim)] uppercase hover:text-[var(--text)]"
-      >
-        ‹ {backLabel}
-      </button>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-bold tracking-tight">
-          {product ? product.name : "Thêm sản phẩm"}
-        </h1>
-        {product && (
-          <>
-            <button
-              type="button"
-              disabled={form.duplicateMut.isPending}
-              onClick={() => form.duplicateMut.mutate()}
-              className={smallBtn}
-            >
-              Nhân bản
-            </button>
-            <button
-              type="button"
-              aria-expanded={form.showPreview}
-              onClick={() => form.setShowPreview((s) => !s)}
-              className={smallBtn}
-            >
-              Xem
-            </button>
-          </>
-        )}
+      {/* Nút quay lại breadcrumb chuẩn tất cả sản phẩm */}
+      <div>
+        <BackButton label={backLabel} onClick={onBack} />
       </div>
 
+      {/* Header thanh điều hướng & Thao tác nhanh tinh gọn */}
+      <div className="flex flex-col gap-3 pb-3 border-b border-[var(--border)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-[var(--text)]">
+            {product ? product.name : "Thêm sản phẩm mới"}
+          </h1>
+          {product && (
+            <span className="rounded bg-[var(--sidebar)] px-2 py-0.5 text-xs font-mono font-semibold text-[var(--dim)]">
+              #{product.id}
+            </span>
+          )}
+        </div>
+
+        {/* Cụm nút hành động góc phải */}
+        <div className="flex items-center gap-2">
+          {product && (
+            <>
+              <button
+                type="button"
+                aria-expanded={form.showPreview}
+                onClick={() => form.setShowPreview((s) => !s)}
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--dim)] transition hover:bg-[var(--sidebar)] hover:text-[var(--text)]"
+              >
+                {form.showPreview ? "✕ Đóng xem trước" : "👁 Xem trước"}
+              </button>
+              <button
+                type="button"
+                disabled={form.duplicateMut.isPending}
+                onClick={() => form.duplicateMut.mutate()}
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--dim)] transition hover:bg-[var(--sidebar)] hover:text-[var(--text)] disabled:opacity-50"
+              >
+                Nhân bản
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            disabled={form.saveMut.isPending}
+            onClick={form.submit}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[var(--accent-dark)] disabled:opacity-50"
+          >
+            {form.saveMut.isPending ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Đang lưu…</span>
+              </>
+            ) : (
+              <span>{product ? "Lưu thay đổi" : "Tạo sản phẩm"}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Thông báo thông tin & lỗi */}
       {form.notice && (
-        <p className="mt-4 rounded-lg bg-[var(--accent-soft)] px-4 py-3 text-sm">
-          {form.notice}
-        </p>
+        <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-4 py-2.5 text-xs font-medium text-[var(--accent-dark)] flex items-center justify-between">
+          <span>{form.notice}</span>
+          <button
+            type="button"
+            onClick={() => form.setNotice(null)}
+            className="text-[var(--dim)] hover:text-[var(--text)] font-bold ml-2"
+          >
+            ×
+          </button>
+        </div>
       )}
       {form.formError && (
-        <p className="mt-4 rounded-lg bg-[#fbe3e3] px-4 py-3 text-sm text-[#9c2b2b]">
-          {form.formError}
-        </p>
+        <div className="rounded-xl border border-[#e3b3b3] bg-[#fbe3e3] px-4 py-2.5 text-xs font-medium text-[#9c2b2b] flex items-center justify-between">
+          <span>{form.formError}</span>
+          <button
+            type="button"
+            onClick={() => form.setFormError(null)}
+            className="text-[#9c2b2b] hover:text-black font-bold ml-2"
+          >
+            ×
+          </button>
+        </div>
       )}
 
+      {/* Xem trước như khách thấy (khi bật) */}
       {form.showPreview && product && (
         <ProductDetailPreviewSection
           product={product}
@@ -109,91 +154,61 @@ export function ProductDetailPage({
         />
       )}
 
-      <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/* Bố cục 2 cột: Cột chính 68% - Cột phụ 32% (Responsive) */}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Cột trái: Thông tin sản phẩm & Biến thể */}
         <div className="min-w-0 space-y-4">
-          <ProductDetailTitleDescSection
+          <ProductDetailMainInfoSection
             name={form.name}
             setName={form.setName}
+            brand={form.brand}
+            setBrand={form.setBrand}
+            scale={form.scale}
+            setScale={form.setScale}
+            vehicleType={form.vehicleType}
+            setVehicleType={form.setVehicleType}
+            modelMaker={form.modelMaker}
+            setModelMaker={form.setModelMaker}
+            catalog={catalog}
             description={form.description}
             setDescription={form.setDescription}
-            descPreview={form.descPreview}
             descRef={form.descRef}
-          />
-
-          <ProductDetailMediaSection
-            variants={form.variants}
-            mediaTarget={form.mediaTarget}
-            setMediaTarget={form.setMediaTarget}
-            mediaUrlOpen={form.mediaUrlOpen}
-            setMediaUrlOpen={form.setMediaUrlOpen}
-            mediaUrl={form.mediaUrl}
-            onMediaUrlChange={form.onMediaUrlChange}
-            mediaUrlState={form.mediaUrlState}
-            applyMediaUrl={form.applyMediaUrl}
-            mediaFileRef={form.mediaFileRef}
-            setOpenPicker={form.setOpenPicker}
           />
 
           <ProductDetailVariantsSection
             variants={form.variants}
+            imageKeys={form.imageKeys}
             setVariant={form.setVariant}
             onAddVariant={() => {
               form.setVariants((vs) => [...vs, emptyDraftVariant()]);
-              form.setOpenPicker(form.variants.length);
             }}
             onRemoveVariant={(i) => {
               form.setVariants((vs) => vs.filter((_, idx) => idx !== i));
-              form.setOpenPicker(null);
             }}
-            dragVariantFrom={form.dragVariantFrom}
-            dragVariantTarget={form.dragVariantTarget}
-            variantCardsRef={form.variantCardsRef}
-            onVariantHandleDown={form.onVariantHandleDown}
-            onVariantHandleMove={form.onVariantHandleMove}
-            endVariantDrag={form.endVariantDrag}
-            reorderVariant={form.reorderVariant}
-            openPicker={form.openPicker}
-            imageKeys={form.imageKeys}
-            setNotice={form.setNotice}
+          />
+
+          {/* Phần SEO & Tìm kiếm đặt ở cột bên trái */}
+          <ProductDetailSeoSection
+            productId={product?.id}
+            name={form.name}
+            description={form.description}
+            seoTitle={form.seoTitle}
+            setSeoTitle={form.setSeoTitle}
+            seoDescription={form.seoDescription}
+            setSeoDescription={form.setSeoDescription}
+            slug={form.slug}
+            setSlug={form.setSlug}
+            seoOpen={form.seoOpen}
+            setSeoOpen={form.setSeoOpen}
           />
         </div>
 
+        {/* Cột phải: Trạng thái, Phân loại, Chiết khấu */}
         <div className="space-y-4">
-          <section className={cardCls} aria-label="Tình trạng hiển thị">
-            <h2 className="text-sm font-bold">Tình trạng hiển thị</h2>
-            <p className="mt-2 flex items-center gap-2 text-sm">
-              <span
-                aria-hidden
-                className={`h-2.5 w-2.5 rounded-full ${
-                  product ? "bg-[#22a06b]" : "bg-[#d9a514]"
-                }`}
-              />
-              {product
-                ? "Hiện trên web bán hàng"
-                : "Chưa lưu — sẽ hiện trên web bán hàng ngay sau khi lưu"}
-            </p>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isFeatured}
-                onChange={(e) => form.setIsFeatured(e.target.checked)}
-                className="h-4 w-4"
-              />
-              Sản phẩm nổi bật trên web khách
-            </label>
-          </section>
-
-          <ProductDetailOrganizationSection
-            vehicleType={form.vehicleType}
-            setVehicleType={form.setVehicleType}
-            brand={form.brand}
-            setBrand={form.setBrand}
-            modelMaker={form.modelMaker}
-            setModelMaker={form.setModelMaker}
-            scale={form.scale}
-            setScale={form.setScale}
-            catalog={catalog}
+          <ProductDetailSidebarSection
             product={product}
+            isFeatured={form.isFeatured}
+            setIsFeatured={form.setIsFeatured}
             productCollections={form.productCollections}
             tags={form.tags}
             setTags={form.setTags}
@@ -204,15 +219,7 @@ export function ProductDetailPage({
         </div>
       </div>
 
-      <ProductDetailSeoSection
-        name={form.name}
-        setName={form.setName}
-        description={form.description}
-        setDescription={form.setDescription}
-        seoOpen={form.seoOpen}
-        setSeoOpen={form.setSeoOpen}
-      />
-
+      {/* Chân trang: Thao tác tiện lợi */}
       <ProductDetailBottomBar
         product={product}
         confirmDelete={form.confirmDelete}
@@ -222,6 +229,7 @@ export function ProductDetailPage({
         onBack={onBack}
         isPendingSave={form.saveMut.isPending}
         onSubmit={form.submit}
+        isDirty={form.isDirty}
       />
     </div>
   );

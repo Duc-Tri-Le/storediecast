@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api";
 import type { Order, OrderTab, Product } from "../types";
-import { orderCode, orderTabOf } from "../utils/format";
 import { Icon, ICONS } from "../components/shared";
 import { OrderCard, OrderRow } from "../components/OrderComponents";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 50;
 
 export function OrdersPage({
-  orders,
   products,
-  loading,
-  error,
-  tab,
+  tab: routeTab = "all",
   setTab,
   onOpenOrder,
+  routePageNumber = 1,
+  routeSearch = "",
+  onNavigateRoute,
 }: {
   orders: Order[];
   products: Product[];
@@ -20,10 +24,85 @@ export function OrdersPage({
   tab: OrderTab;
   setTab: (t: OrderTab) => void;
   onOpenOrder: (id: number) => void;
+  routePageNumber?: number;
+  routeSearch?: string;
+  onNavigateRoute?: (params: { pageNumber?: number; tab?: OrderTab; search?: string }) => void;
 }) {
-  const [search, setSearch] = useState("");
-  // Trạng thái mở rộng của từng đơn: mỗi đơn độc lập — mở/thu gọn một
-  // đơn không làm mất trạng thái của các đơn khác, và không chuyển trang.
+  const [tab, setTabLocal] = useState<OrderTab>(
+    routeTab && ["all", "open", "hold", "closed"].includes(routeTab)
+      ? (routeTab as OrderTab)
+      : "all",
+  );
+  const [search, setSearchLocal] = useState(routeSearch || "");
+  const [currentPage, setCurrentPageLocal] = useState(routePageNumber || 1);
+
+  // Sync state when URL parameters change
+  useEffect(() => {
+    if (routePageNumber != null) setCurrentPageLocal(routePageNumber);
+    if (routeTab != null && ["all", "open", "hold", "closed"].includes(routeTab)) {
+      setTabLocal(routeTab as OrderTab);
+    }
+    if (routeSearch !== undefined) setSearchLocal(routeSearch);
+  }, [routePageNumber, routeTab, routeSearch]);
+
+  const updateRoute = (updates: {
+    pageNumber?: number;
+    tab?: OrderTab;
+    search?: string;
+  }) => {
+    const nextTab = updates.tab !== undefined ? updates.tab : tab;
+    const nextSearch = updates.search !== undefined ? updates.search : search;
+    const nextPage = updates.pageNumber !== undefined ? updates.pageNumber : 1;
+
+    setTab(nextTab);
+    onNavigateRoute?.({
+      pageNumber: nextPage,
+      tab: nextTab,
+      search: nextSearch,
+    });
+  };
+
+  const handleTabChange = (t: OrderTab) => {
+    setTabLocal(t);
+    setCurrentPageLocal(1);
+    updateRoute({ tab: t, pageNumber: 1 });
+  };
+
+  const handleSearchChange = (s: string) => {
+    setSearchLocal(s);
+    setCurrentPageLocal(1);
+    updateRoute({ search: s, pageNumber: 1 });
+  };
+
+  const handlePageChange = (p: number) => {
+    setCurrentPageLocal(p);
+    updateRoute({ pageNumber: p });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // FETCH ONLY CURRENT PAGE FROM SERVER (LIMIT 50 OFFSET ...)
+  const ordersQ = useQuery({
+    queryKey: ["admin-orders-paginated", currentPage, tab, search],
+    queryFn: () =>
+      api.adminListOrdersPaginated({
+        page: currentPage,
+        pageSize: PAGE_SIZE,
+        tab,
+        search,
+      }),
+  });
+
+  const paginatedOrders = ordersQ.data?.orders ?? [];
+  const total = ordersQ.data?.total ?? 0;
+  const totalPages = ordersQ.data?.totalPages ?? 1;
+  const counts = ordersQ.data?.counts ?? { all: 0, open: 0, hold: 0, closed: 0 };
+  const loading = ordersQ.isLoading;
+  const error = ordersQ.error
+    ? ordersQ.error instanceof Error
+      ? ordersQ.error.message
+      : String(ordersQ.error)
+    : null;
+
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const toggleExpanded = (id: number) => {
     setExpandedIds((prev) => {
@@ -33,27 +112,6 @@ export function OrdersPage({
       return next;
     });
   };
-
-  const counts = useMemo(() => {
-    const c: Record<OrderTab, number> = { all: orders.length, open: 0, hold: 0, closed: 0 };
-    for (const o of orders) for (const t of orderTabOf(o)) if (t !== "all") c[t]++;
-    return c;
-  }, [orders]);
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (!orderTabOf(o).includes(tab)) return false;
-      if (!q) return true;
-      return (
-        orderCode(o.id).toLowerCase().includes(q) ||
-        String(o.id).includes(q) ||
-        o.customerName.toLowerCase().includes(q) ||
-        o.customerPhone.includes(q) ||
-        o.items.some((it) => it.productName.toLowerCase().includes(q))
-      );
-    });
-  }, [orders, tab, search]);
 
   const tabs: Array<[OrderTab, string]> = [
     ["all", "Tất cả"],
@@ -77,8 +135,8 @@ export function OrdersPage({
             type="button"
             role="tab"
             aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-1 pb-2 text-sm whitespace-nowrap ${
+            onClick={() => handleTabChange(key)}
+            className={`-mb-px border-b-2 px-1 pb-2 text-sm whitespace-nowrap transition-colors ${
               tab === key
                 ? "border-[var(--accent)] font-semibold text-[var(--accent)]"
                 : "border-transparent text-[var(--dim)] hover:text-[var(--text)]"
@@ -96,7 +154,7 @@ export function OrdersPage({
         <input
           type="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Tìm theo mã đơn, tên khách, số điện thoại, tên sản phẩm"
           aria-label="Tìm kiếm đơn hàng"
           className="w-full rounded-lg border border-[var(--border)] bg-white py-2.5 pr-3 pl-9 text-sm outline-none placeholder:text-[var(--dim)] focus:border-[var(--accent)]"
@@ -109,13 +167,13 @@ export function OrdersPage({
           Không tải được đơn hàng: {error}
         </p>
       )}
-      {!loading && !error && visible.length === 0 && (
+      {!loading && !error && paginatedOrders.length === 0 && (
         <p className="mt-10 text-center text-sm text-[var(--dim)]">
           Không có đơn hàng nào khớp.
         </p>
       )}
 
-      {visible.length > 0 && (
+      {paginatedOrders.length > 0 && (
         <>
           {/* Bảng trên màn hình rộng */}
           <div className="mt-4 hidden overflow-hidden rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] lg:block">
@@ -131,7 +189,7 @@ export function OrdersPage({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((o) => (
+                {paginatedOrders.map((o) => (
                   <OrderRow
                     key={o.id}
                     order={o}
@@ -146,7 +204,7 @@ export function OrdersPage({
           </div>
           {/* Thẻ trên điện thoại */}
           <div className="mt-4 space-y-3 lg:hidden">
-            {visible.map((o) => (
+            {paginatedOrders.map((o) => (
               <OrderCard
                 key={o.id}
                 order={o}
@@ -157,9 +215,17 @@ export function OrdersPage({
               />
             ))}
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={PAGE_SIZE}
+            itemUnit="đơn hàng"
+            onPageChange={handlePageChange}
+          />
         </>
       )}
     </div>
   );
 }
-

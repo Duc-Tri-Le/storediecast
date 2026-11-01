@@ -13,6 +13,7 @@ export const collectionOut = z.object({
   kind: z.string(),
   conditions: z.array(collectionConditionOut),
   description: z.string(),
+  slug: z.string().default(""),
   matchMode: z.string(),
   visible: z.boolean(),
   imageKey: z.string(),
@@ -113,3 +114,17 @@ export const bulkApplyOut = z.object({
   updatedVariants: z.number(),
 });
 
+
+
+export const adminCollectionsPaginatedOut = z.object({
+  collections: z.array(collectionOut),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+  totalPages: z.number(),
+  counts: z.object({
+    all: z.number(),
+    manual: z.number(),
+    auto: z.number(),
+  }),
+});

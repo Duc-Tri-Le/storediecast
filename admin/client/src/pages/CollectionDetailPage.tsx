@@ -1,27 +1,25 @@
+import { useMemo } from "react";
 import type { Product, ShopCollection, CatalogData } from "../types";
 import type {
   CollectionRow,
   CollectionNav,
 } from "../utils/collectionRules";
+import { UnsavedChangesBar } from "../components/shared";
+import { CollectionProductList } from "../components/CollectionProductList";
 import {
-  Icon,
-  cardCls,
-  labelCls,
-  inputCls,
-  smallBtn,
-  UnsavedChangesBar,
-} from "../components/shared";
-import { renderRichText } from "../components/VariantImagePicker";
-import {
-  CollectionProductList,
-} from "../components/CollectionProductList";
-import {
-  CollectionConditionsSection,
   CollectionSeoSection,
   CollectionImageSection,
   CollectionPreviewModal,
 } from "../components/CollectionDetailSections";
+import { CollectionDetailBasicInfo } from "../components/CollectionDetailBasicInfo";
+import { CollectionDetailModeSection } from "../components/CollectionDetailModeSection";
 import { useCollectionDetailForm } from "../hooks/useCollectionDetailForm";
+import { slugify } from "../utils/slug";
+import { totalStock } from "../utils/format";
+import { CollectionDetailHeader } from "../components/CollectionDetailHeader";
+import { CollectionDetailStatsCard } from "../components/CollectionDetailStatsCard";
+import { CollectionDetailFooter } from "../components/CollectionDetailFooter";
+import { CollectionDetailDuplicateModal } from "../components/CollectionDetailDuplicateModal";
 
 export function CollectionDetailPage({
   row,
@@ -49,254 +47,143 @@ export function CollectionDetailPage({
     onDeleted,
   });
 
-  const toolBtn =
-    "rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm hover:bg-[var(--sidebar)]";
-  const selectCls =
-    "rounded-lg border border-[var(--border)] bg-white px-2 py-2 text-sm outline-none focus:border-[var(--accent)]";
+  // Thống kê nhanh của bộ sưu tập
+  const items = form.displayedProducts;
+  const totalItemsCount = items.length;
+  const totalStockCount = useMemo(
+    () => items.reduce((sum, p) => sum + Math.max(0, totalStock(p)), 0),
+    [items],
+  );
+  const priceRange = useMemo(() => {
+    const prices = items
+      .flatMap((p) => p.variants.map((v) => v.promoPrice || v.price))
+      .filter((pr) => pr > 0);
+    if (prices.length === 0) return null;
+    return {
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+    };
+  }, [items]);
+
+  const liveCollectionUrl = collection.id
+    ? `http://localhost:3000/collections/${collection.id}`
+    : `http://localhost:3000/collections/${form.slug || slugify(form.title) || "bo-suu-tap"}`;
 
   return (
-    <div>
+    <div className="mx-auto max-w-6xl pb-20 space-y-5">
+      {/* ── THANH NỔI LƯU THAY ĐỔI ── */}
       <UnsavedChangesBar
         visible={form.isDirty}
         saving={form.saveMut.isPending}
         onSave={form.submit}
         onDiscard={form.discardChanges}
       />
-      <button
-        type="button"
-        onClick={onBack}
-        aria-label="Quay lại Bộ sưu tập"
-        className="inline-flex items-center gap-1 rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--dim)] uppercase hover:text-[var(--text)]"
-      >
-        ‹ Bộ sưu tập
-      </button>
-      <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{form.title}</h1>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={form.toggleStatusMut.isPending}
-          onClick={() =>
-            form.toggleStatusMut.mutate(
-              form.status === "published" ? "draft" : "published",
-            )
-          }
-          className={`${smallBtn} inline-flex items-center gap-1.5`}
-        >
-          {form.status === "published" ? "Tắt bộ sưu tập" : "Bật bộ sưu tập"}
-        </button>
-        <button
-          type="button"
-          onClick={() => form.setPreviewOpen(true)}
-          className={`${smallBtn} inline-flex items-center gap-1.5`}
-        >
-          <Icon
-            d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"
-            size={16}
-          />
-          Xem
-        </button>
-        <span className="flex-1" />
-        {form.status === "published" ? (
-          <span className="inline-block rounded bg-[#dcf2e3] px-3 py-1 text-xs font-semibold text-[#14663c]">
-            Đang hoạt động
-          </span>
-        ) : (
-          <span className="inline-block rounded bg-[#e9f1f9] px-3 py-1 text-xs font-semibold text-[#47617c]">
-            Đã tắt
-          </span>
-        )}
-      </div>
 
-      {form.notice && (
-        <p className="mt-4 rounded-lg bg-[var(--accent-soft)] px-4 py-3 text-sm">
-          {form.notice}
-        </p>
-      )}
+      {/* ── HEADER ── */}
+      <CollectionDetailHeader
+        title={form.title}
+        status={form.status}
+        isBase={isBase}
+        totalItemsCount={totalItemsCount}
+        mode={form.mode}
+        liveCollectionUrl={liveCollectionUrl}
+        isDirty={form.isDirty}
+        isSaving={form.saveMut.isPending}
+        onBack={onBack}
+        onPreview={() => form.setPreviewOpen(true)}
+        onDiscard={form.discardChanges}
+        onSave={form.submit}
+      />
+
+      {/* Thông báo lỗi thao tác nếu có */}
       {form.formError && (
-        <p className="mt-4 rounded-lg bg-[#fbe3e3] px-4 py-3 text-sm text-[#9c2b2b]">
-          {form.formError}
-        </p>
-      )}
-      {isBase && (
-        <p className="mt-4 rounded-lg bg-[#fdf6e0] px-4 py-3 text-sm text-[#7a5b00]">
-          Đây là bộ theo tỉ lệ — một trong 3 bộ gốc đang hiện trên web khách. Điều kiện, chế
-          độ gom, mô tả, ảnh, hiển thị và SEO đều sửa và lưu được như mọi bộ khác; riêng
-          việc xóa bộ này thì không được phép. Nếu đổi tỉ lệ sang tỉ lệ đã có bộ gốc khác,
-          lúc lưu sẽ báo rõ trùng và không lưu.
-        </p>
+        <div className="rounded-xl border border-[#e3b3b3] bg-[#fdf3f3] p-4 text-sm font-medium text-[#c0392b] shadow-xs">
+          ⚠️ {form.formError}
+        </div>
       )}
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <section className={cardCls} aria-label="Tiêu đề và mô tả bộ sưu tập">
-            <label className={labelCls} htmlFor="cd-title">
-              Tiêu đề
-            </label>
-            <input
-              id="cd-title"
-              className={inputCls}
-              value={form.title}
-              maxLength={120}
-              onChange={(e) => form.setTitle(e.target.value)}
-            />
-            <label className={labelCls} htmlFor="cd-desc">
-              Mô tả (tùy chọn)
-            </label>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Định dạng mô tả">
-              <button
-                type="button"
-                className={toolBtn}
-                aria-label="In đậm"
-                onClick={() => form.wrapSelection("**", "**")}
-              >
-                <strong>B</strong>
-              </button>
-              <button
-                type="button"
-                className={toolBtn}
-                aria-label="In nghiêng"
-                onClick={() => form.wrapSelection("*", "*")}
-              >
-                <em>I</em>
-              </button>
-              <button
-                type="button"
-                className={toolBtn}
-                aria-label="Gạch chân"
-                onClick={() => form.wrapSelection("__", "__")}
-              >
-                <u>U</u>
-              </button>
-              <button
-                type="button"
-                className={toolBtn}
-                onClick={() =>
-                  form.setDescription((d) => (d ? `${d}\n• ` : "• "))
-                }
-              >
-                • Danh sách
-              </button>
-              <button
-                type="button"
-                className={toolBtn}
-                aria-pressed={form.descPreview}
-                onClick={() => form.setDescPreview((v) => !v)}
-              >
-                {form.descPreview ? "Soạn thảo" : "Xem trước"}
-              </button>
-            </div>
-            {form.descPreview ? (
-              <div className="mt-2 min-h-24 rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
-                {form.description.trim() ? (
-                  renderRichText(form.description)
-                ) : (
-                  <p className="text-[var(--dim)]">Chưa có mô tả.</p>
-                )}
-              </div>
-            ) : (
-              <textarea
-                id="cd-desc"
-                ref={form.descRef}
-                className={`${inputCls} mt-2 min-h-24`}
-                value={form.description}
-                onChange={(e) => form.setDescription(e.target.value)}
-                placeholder="Mô tả bộ sưu tập này cho khách xem…"
-              />
-            )}
-          </section>
+      {/* ── BỐ CỤC 2 CỘT NỘI DUNG CHÍNH ── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* CỘT TRÁI (2/3): THÔNG TIN, LOẠI BỘ & DANH SÁCH MẪU XE */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Card 1: Tên & Mô tả bộ sưu tập */}
+          <CollectionDetailBasicInfo
+            title={form.title}
+            setTitle={form.setTitle}
+            description={form.description}
+            setDescription={form.setDescription}
+            descPreview={form.descPreview}
+            setDescPreview={form.setDescPreview}
+            descRef={form.descRef}
+          />
 
-          <CollectionConditionsSection
+          {/* Card 2: Chế độ gom sản phẩm & Thiết lập điều kiện tự động */}
+          <CollectionDetailModeSection
+            isBase={isBase}
+            mode={form.mode}
+            setMode={form.setMode}
             conditions={form.conditions}
+            setConditions={form.setConditions}
             matchMode={form.matchMode}
-            onChangeMatchMode={form.setMatchMode}
-            onChangeCondition={form.setCondition}
-            onAddCondition={() =>
-              form.setConditions((cs) => [
-                ...cs,
-                { kind: "brand", operator: "eq", value: "" },
-              ])
-            }
-            onRemoveCondition={(i) =>
-              form.setConditions((cs) => cs.filter((_, idx) => idx !== i))
-            }
+            setMatchMode={form.setMatchMode}
+            setCondition={form.setCondition}
             catalog={catalog}
             allTags={form.allTags}
           />
 
-          <section className={cardCls} aria-label="Sản phẩm trong bộ sưu tập">
-            <h2 className="text-base font-bold">Sản phẩm</h2>
-            <label className="sr-only" htmlFor="cd-mode">
-              Chế độ gom sản phẩm
-            </label>
-            <select
-              id="cd-mode"
-              className={`${selectCls} mt-2 w-full`}
-              value={form.mode}
-              onChange={(e) => form.setMode(e.target.value as any)}
-            >
-              <option value="manual">Thủ công</option>
-              <option value="auto">Tự động</option>
-            </select>
+          {/* Card 3: Danh sách & Chọn sản phẩm */}
+          <CollectionProductList
+            mode={form.mode}
+            sortKey={form.sortKey}
+            onSortChange={form.setSortKey}
+            products={products}
+            manualIds={form.manualIds}
+            onAddManual={(id) => form.setManualIds((ids) => [...ids, id])}
+            onRemoveManual={(id) =>
+              form.setManualIds((ids) => ids.filter((x) => x !== id))
+            }
+            onBulkRemove={(ids) =>
+              form.setManualIds((prev) => prev.filter((x) => !ids.includes(x)))
+            }
+            onMoveManual={form.moveManual}
+            onOpenProduct={onOpenProduct}
+            displayedProducts={form.displayedProducts}
+            sortedProducts={form.sortedProducts}
+            positionIndexOf={form.positionIndexOf}
+            autoMatchedCount={form.autoMatched.length}
+            matchMode={form.matchMode}
+            title={form.title}
+          />
 
-            <CollectionProductList
-              mode={form.mode}
-              sortKey={form.sortKey}
-              onSortChange={form.setSortKey}
-              products={products}
-              manualIds={form.manualIds}
-              onAddManual={(id) => form.setManualIds((ids) => [...ids, id])}
-              onRemoveManual={(id) =>
-                form.setManualIds((ids) => ids.filter((x) => x !== id))
-              }
-              onBulkRemove={(ids) =>
-                form.setManualIds((prev) => prev.filter((x) => !ids.includes(x)))
-              }
-              onMoveManual={form.moveManual}
-              onOpenProduct={onOpenProduct}
-              displayedProducts={form.displayedProducts}
-              sortedProducts={form.sortedProducts}
-              positionIndexOf={form.positionIndexOf}
-              autoMatchedCount={form.autoMatched.length}
-              matchMode={form.matchMode}
-              title={form.title}
-            />
-          </section>
-
+          {/* Card 4: Tối ưu SEO & Handle truy cập */}
           <CollectionSeoSection
             title={form.title}
             description={form.description}
+            slug={form.slug}
             seoTitle={form.seoTitle}
             seoDescription={form.seoDescription}
             seoOpen={form.seoOpen}
             onToggleSeo={() => form.setSeoOpen((v) => !v)}
             onChangeSeoTitle={form.setSeoTitle}
             onChangeSeoDesc={form.setSeoDescription}
+            onChangeSlug={form.setSlug}
           />
         </div>
 
-        <div className="space-y-4">
-          <section className={cardCls} aria-label="Hiển thị bộ sưu tập">
-            <h2 className="text-base font-bold">Hiển thị bộ sưu tập</h2>
-            <p className="mt-1 text-sm text-[var(--dim)]">
-              Quản lý việc bộ sưu tập này có hiện trên trang Bộ sưu tập của web khách hay
-              không.
-            </p>
-            <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm">
-              <input
-                type="checkbox"
-                checked={form.visibleOnList}
-                onChange={(e) => form.setVisibleOnList(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0"
-              />
-              <span>
-                <span className="font-medium">Hiện trên trang Bộ sưu tập của web khách</span>
-                <span className="block text-xs text-[var(--dim)]">
-                  Bộ sưu tập này sẽ hiện trong danh sách bộ sưu tập trên web bán hàng.
-                </span>
-              </span>
-            </label>
-          </section>
+        {/* CỘT PHẢI (1/3): TRẠNG THÁI & ẢNH ĐẠI DIỆN */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Card 1: Trạng thái hiển thị */}
+          <CollectionDetailStatsCard
+            status={form.status}
+            setStatus={form.setStatus}
+            visibleOnList={form.visibleOnList}
+            setVisibleOnList={form.setVisibleOnList}
+            totalItemsCount={totalItemsCount}
+            totalStockCount={totalStockCount}
+            priceRange={priceRange}
+          />
 
+          {/* Card 2: Ảnh đại diện bộ sưu tập */}
           <CollectionImageSection
             title={form.title}
             imageKey={form.imageKey}
@@ -312,56 +199,19 @@ export function CollectionDetailPage({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {isBase ? (
-          <span className="text-sm text-[var(--dim)]">
-            Bộ theo tỉ lệ không được phép xóa.
-          </span>
-        ) : form.confirmDelete ? (
-          <>
-            <span className="text-sm text-[#9c2b2b]">
-              Xóa hẳn bộ “{collection.title}” khỏi database chung? Sản phẩm trong bộ vẫn giữ
-              nguyên, không hoàn tác được.
-            </span>
-            <button
-              type="button"
-              disabled={form.deleteMut.isPending}
-              onClick={() => form.deleteMut.mutate()}
-              className="rounded-lg bg-[#c0392b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Chắc chắn xóa
-            </button>
-            <button
-              type="button"
-              onClick={() => form.setConfirmDelete(false)}
-              className={smallBtn}
-            >
-              Không xóa
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => form.setConfirmDelete(true)}
-            className="rounded-lg bg-[#c0392b] px-4 py-2 text-sm font-semibold text-white"
-          >
-            Xóa
-          </button>
-        )}
-        <span className="flex-1" />
-        <button type="button" onClick={onBack} className={smallBtn}>
-          Hủy
-        </button>
-        <button
-          type="button"
-          disabled={form.saveMut.isPending}
-          onClick={form.submit}
-          className="rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-dark)] disabled:opacity-50"
-        >
-          {form.saveMut.isPending ? "Đang lưu…" : "Lưu"}
-        </button>
-      </div>
+      {/* ── FOOTER HÀNH ĐỘNG CUỐI TRANG ── */}
+      <CollectionDetailFooter
+        isBase={isBase}
+        confirmDelete={form.confirmDelete}
+        setConfirmDelete={form.setConfirmDelete}
+        isDeleting={form.deleteMut.isPending}
+        isSaving={form.saveMut.isPending}
+        onDelete={() => form.deleteMut.mutate()}
+        onBack={onBack}
+        onSave={form.submit}
+      />
 
+      {/* Popup Xem trước Modal */}
       {form.previewOpen && (
         <CollectionPreviewModal
           title={form.title}
@@ -374,6 +224,14 @@ export function CollectionDetailPage({
           onClose={() => form.setPreviewOpen(false)}
         />
       )}
+
+      {/* Modal xác nhận lưu trùng tỉ lệ */}
+      <CollectionDetailDuplicateModal
+        duplicatePrompt={form.duplicatePrompt}
+        onCancel={form.cancelDuplicateSave}
+        onConfirm={form.confirmDuplicateSave}
+        isSaving={form.saveMut.isPending}
+      />
     </div>
   );
 }

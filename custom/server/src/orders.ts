@@ -1,81 +1,23 @@
 import { defineAction, z } from "./space";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "./schema";
-import type { ProductRow, VariantRow } from "./catalog";
+import type { VariantRow } from "./catalog";
 import { computeOrderTotals } from "./pricing";
 import { isValidPhone, normalizePhone } from "./phone";
 import { findActiveDiscount } from "./discounts";
+import {
+  orderItemOut,
+  orderOut,
+  type StockLine,
+  tryDecrement,
+  incrementStock,
+  createOrderResponse,
+  type CreateOrderResult,
+  updateOrderStatusResponse,
+  type UpdateOrderStatusResult,
+} from "./orderStockOps";
 
-// ── Đơn hàng phía khách: tạo / tra cứu / tự hủy đơn Mới của chính mình ──
-export const orderItemOut = z.object({
-  id: z.number(),
-  productId: z.number(),
-  variantId: z.number().nullable(),
-  colorName: z.string(),
-  productName: z.string(),
-  scale: z.string(),
-  unitPrice: z.number(),
-  quantity: z.number(),
-});
-
-export const orderOut = z.object({
-  id: z.number(),
-  customerName: z.string(),
-  customerPhone: z.string(),
-  customerAddress: z.string(),
-  note: z.string(),
-  paymentMethod: z.string(),
-  status: z.string(),
-  subtotalBeforeBulk: z.number(),
-  bulkPct: z.number(),
-  bulkDiscountAmount: z.number(),
-  subtotal: z.number(),
-  discountCode: z.string().nullable(),
-  discountAmount: z.number(),
-  subtotalAfterCoupon: z.number(),
-  shippingFee: z.number(),
-  total: z.number(),
-  createdAt: z.string(),
-  items: z.array(orderItemOut),
-});
-
-interface StockLine {
-  product: ProductRow;
-  variant: VariantRow;
-  quantity: number;
-  unitPrice: number;
-}
-
-// Trừ kho nguyên tử cho một dòng biến thể; trả về false nếu không đủ tồn.
-async function tryDecrement(db: any, line: StockLine): Promise<boolean> {
-  const upd = await db
-    .update(schema.variants)
-    .set({ stock: sql`${schema.variants.stock} - ${line.quantity}` })
-    .where(
-      and(
-        eq(schema.variants.id, line.variant.id),
-        gte(schema.variants.stock, line.quantity),
-      ),
-    )
-    .returning({ id: schema.variants.id });
-  return upd.length > 0;
-}
-
-// Cộng trả kho (hoàn tác khi tạo đơn thất bại giữa chừng).
-async function incrementStock(db: any, line: StockLine): Promise<void> {
-  await db
-    .update(schema.variants)
-    .set({ stock: sql`${schema.variants.stock} + ${line.quantity}` })
-    .where(eq(schema.variants.id, line.variant.id));
-}
-
-const createOrderResponse = z.object({
-  ok: z.boolean(),
-  orderId: z.number().nullable(),
-  error: z.string().nullable(),
-  total: z.number(),
-});
-type CreateOrderResult = z.infer<typeof createOrderResponse>;
+export { orderItemOut, orderOut };
 
 export const createOrder = defineAction({
   request: z.object({
@@ -241,18 +183,38 @@ export const createOrder = defineAction({
 });
 
 export const listOrders = defineAction({
-  request: z.object({ phone: z.string().default("") }),
+  request: z.object({
+    phone: z.string().default(""),
+    orderId: z.number().int().positive().optional(),
+  }),
   response: z.object({ orders: z.array(orderOut) }),
   async handler(ctx, args) {
     const db = ctx.db;
     const phone = normalizePhone(args.phone);
-    if (!isValidPhone(phone)) return { orders: [] };
-    const rows = await db
-      .select()
-      .from(schema.orders)
-      .where(eq(schema.orders.phone, phone))
-      .orderBy(desc(schema.orders.id))
-      .limit(100);
+    const hasValidPhone = isValidPhone(phone);
+    if (!hasValidPhone && !args.orderId) return { orders: [] };
+
+    let rows: any[] = [];
+    if (args.orderId && hasValidPhone) {
+      rows = await db
+        .select()
+        .from(schema.orders)
+        .where(and(eq(schema.orders.id, args.orderId), eq(schema.orders.phone, phone)))
+        .limit(1);
+    } else if (args.orderId) {
+      rows = await db
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.id, args.orderId))
+        .limit(1);
+    } else {
+      rows = await db
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.phone, phone))
+        .orderBy(desc(schema.orders.id))
+        .limit(100);
+    }
     const ids = rows.map((r: any) => r.id);
     const allItems = ids.length
       ? await db.select().from(schema.orderLines).where(inArray(schema.orderLines.orderId, ids))
@@ -301,9 +263,6 @@ export const listOrders = defineAction({
   },
 });
 
-const updateOrderStatusResponse = z.object({ ok: z.boolean(), error: z.string().nullable() });
-type UpdateOrderStatusResult = z.infer<typeof updateOrderStatusResponse>;
-
 export const updateOrderStatus = defineAction({
   request: z.object({
     orderId: z.number().int().positive(),
@@ -327,9 +286,10 @@ export const updateOrderStatus = defineAction({
     if (order.status !== "new") {
       return { ok: false, error: "Đơn đã được shop xử lý, không tự hủy được nữa — vui lòng liên hệ shop." };
     }
+    const nowIso = new Date().toISOString();
     const flipped = await db
       .update(schema.orders)
-      .set({ status: "cancelled", updatedAt: new Date().toISOString() })
+      .set({ status: "cancelled", cancelledAt: nowIso, updatedAt: nowIso })
       .where(and(eq(schema.orders.id, args.orderId), eq(schema.orders.status, "new")))
       .returning({ id: schema.orders.id });
     if (flipped.length === 0) {

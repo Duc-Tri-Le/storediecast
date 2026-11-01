@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Discount } from "../types";
 import { fmtVND } from "../utils/format";
 import { Icon, ICONS, Chip } from "../components/shared";
 import { DiscountEditor } from "../components/DiscountEditor";
+import { Pagination } from "../components/Pagination";
 
 export function DiscountsPage({
   discounts,
@@ -19,6 +20,21 @@ export function DiscountsPage({
   const [editing, setEditing] = useState<Discount | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Discount | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(discounts.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedDiscounts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return discounts.slice(start, start + PAGE_SIZE);
+  }, [discounts, currentPage]);
 
   const toggleMut = useMutation({
     mutationFn: (d: Discount) =>
@@ -77,7 +93,7 @@ export function DiscountsPage({
         <p className="mt-10 text-center text-sm text-[var(--dim)]">Chưa có mã giảm giá nào.</p>
       )}
       <div className="mt-5 space-y-2">
-        {discounts.map((d) => (
+        {paginatedDiscounts.map((d) => (
           <div
             key={d.id}
             className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] px-4 py-3"
@@ -114,6 +130,18 @@ export function DiscountsPage({
           </div>
         ))}
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={discounts.length}
+        pageSize={PAGE_SIZE}
+        itemUnit="mã giảm giá"
+        onPageChange={(p) => {
+          setCurrentPage(p);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
 
       {editing && (
         <DiscountEditor

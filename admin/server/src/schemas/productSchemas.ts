@@ -32,6 +32,10 @@ export const adminProductOut = z.object({
   internalCode: z.string().nullable(),
   inventoryPolicy: z.string(),
   createdAt: z.string(),
+  slug: z.string().default(""),
+  seoTitle: z.string().default(""),
+  seoDescription: z.string().default(""),
+  totalSold: z.number().default(0),
   variants: z.array(adminVariantOut),
   images: z.array(
     z.object({ imageKey: z.string(), variantId: z.number().nullable() }),
@@ -69,6 +73,10 @@ export const adminOrderOut = z.object({
   shippingFee: z.number(),
   total: z.number(),
   createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  confirmedAt: z.string().nullable().optional(),
+  doneAt: z.string().nullable().optional(),
+  cancelledAt: z.string().nullable().optional(),
   items: z.array(adminOrderItemOut),
 });
 
@@ -98,6 +106,9 @@ export const productInput = z.object({
   isFeatured: z.boolean().default(false),
   modelMaker: z.string().max(60).default(""),
   inventoryPolicy: z.enum(["track_stop", "no_track"]).optional(),
+  slug: z.string().max(200).optional(),
+  seoTitle: z.string().max(200).optional(),
+  seoDescription: z.string().max(1000).optional(),
   variants: z
     .array(
       z.object({
@@ -117,3 +128,49 @@ export const productInput = z.object({
     .max(12),
 });
 
+export const adminProductsPaginatedOut = z.object({
+  products: z.array(adminProductOut),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+  totalPages: z.number(),
+  counts: z.object({
+    all: z.number(),
+    in: z.number(),
+    out: z.number(),
+    bestSelling: z.number().optional(),
+  }),
+});
+
+export const adminInventoryPaginatedOut = z.object({
+  rows: z.array(
+    z.object({
+      product: adminProductOut,
+      variant: adminVariantOut,
+    }),
+  ),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+  totalPages: z.number(),
+  counts: z.object({
+    all: z.number(),
+    in: z.number(),
+    low: z.number(),
+    out: z.number(),
+  }),
+});
+
+export const adminOrdersPaginatedOut = z.object({
+  orders: z.array(adminOrderOut),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+  totalPages: z.number(),
+  counts: z.object({
+    all: z.number(),
+    open: z.number(),
+    hold: z.number(),
+    closed: z.number(),
+  }),
+});

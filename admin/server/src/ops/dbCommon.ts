@@ -71,6 +71,9 @@ export type ProductInput = {
   isFeatured: boolean;
   modelMaker: string;
   inventoryPolicy?: string;
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   variants: VariantInput[];
 };
 

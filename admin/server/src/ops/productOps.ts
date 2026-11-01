@@ -42,6 +42,15 @@ export function listProducts(db: Database): Row[] {
     a.push(im);
     iBy.set(pid, a);
   }
+  const soldRows = db
+    .query(
+      "SELECT product_id, COALESCE(SUM(quantity), 0) as total_sold FROM order_items GROUP BY product_id",
+    )
+    .all() as { product_id: number; total_sold: number }[];
+  const soldBy = new Map<number, number>();
+  for (const s of soldRows) {
+    soldBy.set(num(s.product_id), num(s.total_sold));
+  }
   return prods.map((r) => ({
     id: num(r.id),
     name: str(r.name),
@@ -57,6 +66,10 @@ export function listProducts(db: Database): Row[] {
     internalCode: nullableStr(r.internal_code),
     inventoryPolicy: str(r.inventory_policy ?? "track_stop") || "track_stop",
     createdAt: iso(r.created_at),
+    slug: str(r.slug ?? ""),
+    seoTitle: str(r.seo_title ?? ""),
+    seoDescription: str(r.seo_description ?? ""),
+    totalSold: soldBy.get(num(r.id)) ?? 0,
     variants: (vBy.get(num(r.id)) ?? []).map((v) => ({
       id: num(v.id),
       colorName: str(v.color_name),
@@ -153,15 +166,11 @@ export function deleteVariantsBulk(db: Database, rawIds: unknown): Row {
       const first = remaining[0];
       if (!first) continue;
       db.query(
-        "UPDATE products SET color_name = ?, price = ?, promo_price = ?, stock = ?, image_key = ?, sku = ?, sku_status = ? WHERE id = ?",
+        "UPDATE products SET sku = ?, sku_status = ?, updated_at = ? WHERE id = ?",
       ).run(
-        str(first.color_name),
-        num(first.price),
-        nullableNum(first.promo_price),
-        num(first.stock),
-        str(first.image_key),
         nullableStr(first.sku),
         str(first.sku_status),
+        new Date().toISOString(),
         pid,
       );
     }
@@ -171,4 +180,3 @@ export function deleteVariantsBulk(db: Database, rawIds: unknown): Row {
   }
   return { ok: true, error: null, deleted, deletedProducts };
 }
-

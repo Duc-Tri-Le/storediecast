@@ -65,7 +65,8 @@ async function handleAction(actionName: string, args: any) {
   if (!handlerDef) {
     return { status: 404, payload: { ok: false, error: `Action '${actionName}' không tồn tại.` } };
   }
-  const result = await handlerDef.handler({ db }, args || {});
+  const parsedArgs = handlerDef.request ? handlerDef.request.parse(args || {}) : (args || {});
+  const result = await handlerDef.handler({ db }, parsedArgs);
   return { status: 200, payload: { ok: true, result } };
 }
 
@@ -90,12 +91,24 @@ if (typeof Bun !== "undefined") {
       let filePath = join(DIST_DIR, url.pathname === "/" ? "index.html" : url.pathname);
       let file = Bun.file(filePath);
       if (await file.exists()) {
-        return new Response(file);
+        return new Response(file, {
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+          },
+        });
       }
 
       const indexFile = Bun.file(join(DIST_DIR, "index.html"));
       if (await indexFile.exists()) {
-        return new Response(indexFile);
+        return new Response(indexFile, {
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+          },
+        });
       }
 
       return new Response("Not found", { status: 404 });
@@ -144,7 +157,12 @@ else {
     if (existsSync(target) && statSync(target).isFile()) {
       const ext = extname(target).toLowerCase();
       const mime = MIME_TYPES[ext] || "application/octet-stream";
-      res.writeHead(200, { "Content-Type": mime });
+      res.writeHead(200, {
+        "Content-Type": mime,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      });
       createReadStream(target).pipe(res);
     } else {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });

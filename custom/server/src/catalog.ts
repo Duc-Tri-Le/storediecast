@@ -33,10 +33,25 @@ export const productOut = z.object({
   features: z.string(),
   imageKey: z.string(),
   isFeatured: z.boolean(),
+  slug: z.string().default(""),
+  seoTitle: z.string().default(""),
+  seoDescription: z.string().default(""),
   variants: z.array(variantOut),
   images: z.array(productImageOut),
 });
 
+export const collectionOut = z.object({
+  id: z.number(),
+  title: z.string(),
+  description: z.string(),
+  slug: z.string(),
+  imageKey: z.string(),
+  seoTitle: z.string(),
+  seoDescription: z.string(),
+  isScale: z.boolean(),
+});
+
+export type CollectionRow = typeof schema.collections.$inferSelect;
 export type ProductRow = typeof schema.products.$inferSelect;
 export type VariantRow = typeof schema.variants.$inferSelect;
 
@@ -138,6 +153,9 @@ export function toProduct(
     features: r.tags || "",
     imageKey: def?.image || "scale132",
     isFeatured: r.featured === 1,
+    slug: r.slug || "",
+    seoTitle: r.seoTitle || "",
+    seoDescription: r.seoDescription || "",
     variants: variants.map(toVariant),
     images: images,
   };

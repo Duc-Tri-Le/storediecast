@@ -1,4 +1,5 @@
 import type { Order, OrderTab, Product, Variant } from "../types";
+import { resolveProductImage } from "./imageMaps";
 
 export function fmtVND(n: number): string {
   return `${n.toLocaleString("vi-VN")}₫`;
@@ -61,11 +62,13 @@ export function colorHex(colorName: string): string {
   return "#b9c0c8";
 }
 
-export function directImageSrc(imageKey: string): string | null {
+export function directImageSrc(imageKey?: string | null): string | null {
+  if (!imageKey) return null;
   const k = imageKey.trim();
-  if (/^https?:\/\//i.test(k)) return k;
-  if (/^data:image\//i.test(k)) return k;
-  return null;
+  if (!k) return null;
+  if (/^https?:\/\//i.test(k) || /^data:image\//i.test(k)) return k;
+  const resolved = resolveProductImage(k, "");
+  return resolved || null;
 }
 
 export function totalStock(p: Product): number {

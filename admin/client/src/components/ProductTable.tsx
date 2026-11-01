@@ -38,11 +38,13 @@ export function ProductTable({
               <th className="px-4 py-3 font-medium">Tỉ lệ</th>
               <th className="px-4 py-3 font-medium">Giá</th>
               <th className="px-4 py-3 font-medium">Tồn kho</th>
+              <th className="px-4 py-3 font-medium">Bán được</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((p) => {
               const dv = defaultVariant(p);
+              const sold = p.totalSold ?? 0;
               return (
                 <tr
                   key={p.id}
@@ -110,6 +112,15 @@ export function ProductTable({
                       <Chip tone="red">Hết hàng</Chip>
                     )}
                   </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {sold > 0 ? (
+                      <span className="font-bold text-[var(--accent)]">
+                        {sold} chiếc
+                      </span>
+                    ) : (
+                      <span className="text-[var(--dim)]">0</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -131,6 +142,7 @@ export function ProductTable({
       <div className="mt-3 space-y-3 lg:hidden">
         {visible.map((p) => {
           const dv = defaultVariant(p);
+          const sold = p.totalSold ?? 0;
           return (
             <div
               key={p.id}
@@ -181,6 +193,10 @@ export function ProductTable({
                     )}
                     {" · "}
                     {totalStock(p) > 0 ? `Còn ${totalStock(p)}` : "Hết hàng"}
+                    {" · "}
+                    <span className="font-bold text-[var(--accent)]">
+                      Bán được {sold}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -191,4 +207,3 @@ export function ProductTable({
     </>
   );
 }
-

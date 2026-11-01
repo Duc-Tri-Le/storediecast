@@ -7,7 +7,10 @@ import "./theme.css";
 const spaceQueryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true, // Khi chuyển tab quay lại, tự động nạp dữ liệu mới
+      refetchOnReconnect: true,   // Khi mạng kết nối lại, tự động nạp dữ liệu mới
+      refetchInterval: false,     // Tắt hoàn toàn timer polling ngầm
+      staleTime: 0,               // Dữ liệu luôn tươi mới khi tải
       retry: 1,
     },
   },

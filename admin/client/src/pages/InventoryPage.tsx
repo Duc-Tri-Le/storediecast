@@ -1,20 +1,28 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api";
-import type { CatalogData, Product, ProductInput, ShopCollection, Variant } from "../types";
+import type { CatalogData, Product, ShopCollection, Variant } from "../types";
 import { BulkDeleteBar, BulkDeleteConfirmDialog, Icon, ICONS } from "../components/shared";
-import { InventoryTable, productInputWithStocks } from "../components/InventoryTable";
-import { ProductDetailPage } from "./ProductDetailPage";
+import { InventoryTable } from "../components/InventoryTable";
+import { Pagination } from "../components/Pagination";
+import {
+  PAGE_SIZE,
+  type StockFilter,
+  useInventoryState,
+} from "../hooks/useInventoryState";
 
-export type StockFilter = "all" | "in" | "low" | "out";
+export type { StockFilter };
 
 export function InventoryPage({
-  products,
-  loading,
-  error,
-  collections,
-  catalog,
+  products: _fallbackProducts,
+  loading: _fallbackLoading,
+  error: _fallbackError,
+  collections: _collections,
+  catalog: _catalog,
   onGoProducts,
+  onOpenProduct,
+  routePageNumber = 1,
+  routeFilter = "all",
+  routeSearch = "",
+  routeSortDir = "asc",
+  onNavigateRoute,
 }: {
   products: Product[];
   loading: boolean;
@@ -22,137 +30,80 @@ export function InventoryPage({
   collections: ShopCollection[];
   catalog: CatalogData | null;
   onGoProducts: () => void;
+  onOpenProduct: (id: number) => void;
+  routePageNumber?: number;
+  routeFilter?: string;
+  routeSearch?: string;
+  routeSortDir?: "asc" | "desc";
+  onNavigateRoute?: (params: {
+    pageNumber?: number;
+    filter?: string;
+    search?: string;
+    sortDir?: "asc" | "desc";
+  }) => void;
 }) {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<StockFilter>("all");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [selected, setSelected] = useState<number[]>([]);
-  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [detailProductId, setDetailProductId] = useState<number | null>(null);
-  const queryClient = useQueryClient();
-
-  const saveMut = useMutation({
-    mutationFn: (job: { input: ProductInput; variantIds: number[]; label: string }) =>
-      api.adminUpsertProduct(job.input),
-    onSuccess: (res, job) => {
-      if (!res.ok) {
-        setNotice(res.error ?? "Không lưu được tồn kho.");
-        return;
-      }
-      setNotice(
-        `Đã cập nhật tồn kho ${job.label} — ghi thẳng vào database chung, web khách thấy ngay.`,
-      );
-      setDrafts((d) => {
-        const next = { ...d };
-        for (const id of job.variantIds) delete next[id];
-        return next;
-      });
-      queryClient.invalidateQueries();
-    },
-    onError: (e) => setNotice(e instanceof Error ? e.message : String(e)),
+  const {
+    search,
+    filter,
+    sortDir,
+    currentPage,
+    handleFilterChange,
+    handleSearchChange,
+    handleSortDirChange,
+    handlePageChange,
+    paginatedRows,
+    total,
+    totalPages,
+    counts,
+    loading,
+    error,
+    drafts,
+    setDrafts,
+    selected,
+    setSelected,
+    confirmBulkDelete,
+    setConfirmBulkDelete,
+    notice,
+    saveMut,
+    deleteVariantsMut,
+    selectedRows,
+    targetFor,
+    stepDraft,
+    saveRow,
+    visibleIds,
+    allVisibleSelected,
+    toggleSelect,
+  } = useInventoryState({
+    routePageNumber,
+    routeFilter,
+    routeSearch,
+    routeSortDir,
+    onNavigateRoute,
   });
-
-  const deleteVariantsMut = useMutation({
-    mutationFn: (ids: number[]) => api.adminDeleteVariants({ variantIds: ids }),
-    onSuccess: (res) => {
-      setConfirmBulkDelete(false);
-      if (res.ok) {
-        setSelected([]);
-        setNotice(
-          `Đã xóa ${res.deleted} biến thể màu khỏi database chung` +
-            (res.deletedProducts > 0
-              ? ` — ${res.deletedProducts} sản phẩm đã hết biến thể nên cũng bị xóa hẳn.`
-              : ".") +
-            " Web khách không còn thấy các biến thể này.",
-        );
-        queryClient.invalidateQueries();
-      } else {
-        setNotice(res.error ?? "Không xóa được các biến thể đã chọn.");
-      }
-    },
-    onError: (e) => {
-      setConfirmBulkDelete(false);
-      setNotice(e instanceof Error ? e.message : String(e));
-    },
-  });
-
-  const allRows = useMemo(() => {
-    const out: Array<{ product: Product; variant: Variant }> = [];
-    for (const p of products) for (const v of p.variants) out.push({ product: p, variant: v });
-    return out;
-  }, [products]);
-
-  const selectedRows = allRows.filter((r) => selected.includes(r.variant.id));
-
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const filtered = allRows.filter(({ product, variant }) => {
-      if (filter === "in" && variant.stock <= 0) return false;
-      if (filter === "low" && !(variant.stock > 0 && variant.stock <= 3)) return false;
-      if (filter === "out" && variant.stock > 0) return false;
-      if (!q) return true;
-      return (
-        product.name.toLowerCase().includes(q) ||
-        product.brand.toLowerCase().includes(q) ||
-        variant.colorName.toLowerCase().includes(q) ||
-        (variant.sku ?? "").toLowerCase().includes(q) ||
-        (variant.internalCode ?? "").toLowerCase().includes(q)
-      );
-    });
-    return filtered.sort((a, b) =>
-      sortDir === "asc"
-        ? a.variant.stock - b.variant.stock || a.product.name.localeCompare(b.product.name)
-        : b.variant.stock - a.variant.stock || a.product.name.localeCompare(b.product.name),
-    );
-  }, [allRows, search, filter, sortDir]);
-
-  const totalStockAll = allRows.reduce((s, r) => s + r.variant.stock, 0);
-
-  const parsedDraft = (variantId: number): number | null => {
-    const raw = drafts[variantId];
-    if (raw == null || raw.trim() === "") return null;
-    const n = Number(raw.replace(/[^\d]/g, ""));
-    if (!Number.isFinite(n)) return null;
-    return Math.max(0, Math.trunc(n));
-  };
-
-  const targetFor = (variant: Variant): number | null => parsedDraft(variant.id);
-
-  const stepDraft = (variant: Variant, delta: number) => {
-    const shown = parsedDraft(variant.id) ?? variant.stock;
-    const next = Math.max(0, shown + delta);
-    setDrafts((d) => ({ ...d, [variant.id]: String(next) }));
-  };
-
-  const saveRow = (product: Product, variant: Variant) => {
-    const target = targetFor(variant);
-    if (target == null || target === variant.stock) return;
-    saveMut.mutate({
-      input: productInputWithStocks(product, new Map([[variant.id, target]])),
-      variantIds: [variant.id],
-      label: `“${product.name} — ${variant.colorName}” thành ${target} chiếc`,
-    });
-  };
-
-  const toggleSelect = (variantId: number, checked: boolean) =>
-    setSelected((s) =>
-      checked ? [...new Set([...s, variantId])] : s.filter((x) => x !== variantId),
-    );
-
-  const visibleIds = rows.map((r) => r.variant.id);
-  const allVisibleSelected =
-    visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
 
   const renderUpdateControls = (product: Product, variant: Variant) => {
+    const rawDraft = drafts[variant.id];
+    const dirty = rawDraft !== undefined;
     const target = targetFor(variant);
-    const dirty = target != null && target !== variant.stock;
+    const stockErr =
+      dirty && target == null
+        ? "Số lượng phải là số nguyên ≥ 0"
+        : dirty && target != null && target < 0
+          ? "Số lượng không được âm"
+          : null;
+
     return (
       <div>
+        {stockErr && (
+          <span className="block text-[10px] text-[#c0392b] font-semibold leading-tight mb-1">
+            {stockErr}
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <div
-            className="flex w-fit items-center overflow-hidden rounded-lg border border-[var(--border)]"
+            className={`flex w-fit items-center overflow-hidden rounded-lg border transition ${
+              stockErr ? "border-[#c0392b] bg-[#fff8f8]" : "border-[var(--border)]"
+            }`}
             role="group"
             aria-label={`Cập nhật số lượng ${product.name} màu ${variant.colorName}`}
           >
@@ -173,7 +124,11 @@ export function InventoryPage({
               onChange={(e) =>
                 setDrafts((d) => ({ ...d, [variant.id]: e.target.value }))
               }
-              className="w-[68px] border-x border-[var(--border)] bg-[var(--sidebar)] px-2 py-1.5 text-center text-sm outline-none focus:border-[var(--accent)] focus:bg-white"
+              className={`w-[68px] border-x px-2 py-1.5 text-center text-sm outline-none transition ${
+                stockErr
+                  ? "border-[#c0392b] bg-[#fff8f8] text-[#c0392b]"
+                  : "border-[var(--border)] bg-[var(--sidebar)] focus:border-[var(--accent)] focus:bg-white text-[var(--text)]"
+              }`}
             />
             <button
               type="button"
@@ -186,14 +141,14 @@ export function InventoryPage({
           </div>
           <button
             type="button"
-            disabled={!dirty || saveMut.isPending}
+            disabled={!dirty || stockErr != null || saveMut.isPending}
             onClick={() => saveRow(product, variant)}
             className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium whitespace-nowrap hover:bg-[var(--sidebar)] disabled:opacity-40"
           >
             Lưu
           </button>
         </div>
-        {target != null && (
+        {target != null && !stockErr && (
           <p className="mt-1 text-xs text-[var(--dim)]">
             {dirty ? `Số lượng mới → sẽ thành ${target} chiếc` : "Đang bằng tồn hiện tại"}
           </p>
@@ -202,47 +157,16 @@ export function InventoryPage({
     );
   };
 
-  const detailProduct =
-    detailProductId != null
-      ? (products.find((p) => p.id === detailProductId) ?? null)
-      : null;
-  if (detailProduct) {
-    return (
-      <ProductDetailPage
-        key={detailProduct.id}
-        product={detailProduct}
-        allProducts={products}
-        collections={collections}
-        catalog={catalog}
-        backLabel="Tồn kho"
-        onBack={() => setDetailProductId(null)}
-        onSaved={(msg) => {
-          setDetailProductId(null);
-          setNotice(msg);
-        }}
-        onDeleted={(msg) => {
-          setDetailProductId(null);
-          setNotice(msg);
-        }}
-        onDuplicated={(msg) => {
-          setDetailProductId(null);
-          setNotice(msg);
-        }}
-      />
-    );
-  }
+  const tabs: Array<{ key: StockFilter; label: string; count: number }> = [
+    { key: "all", label: "Tất cả", count: counts.all },
+    { key: "in", label: "Còn hàng", count: counts.in },
+    { key: "low", label: "Sắp hết", count: counts.low },
+    { key: "out", label: "Hết hàng", count: counts.out },
+  ];
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onGoProducts}
-        className="inline-flex items-center gap-1 rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--dim)] uppercase hover:text-[var(--text)]"
-      >
-        ‹ Sản phẩm
-      </button>
-
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Tồn kho</h1>
         <button
           type="button"
@@ -252,7 +176,7 @@ export function InventoryPage({
           Xem sản phẩm
         </button>
         <p className="ml-auto text-sm text-[var(--dim)]">
-          {allRows.length} biến thể · Tổng tồn {totalStockAll} chiếc
+          {total} biến thể · Trang {currentPage}/{totalPages}
         </p>
       </div>
 
@@ -261,14 +185,22 @@ export function InventoryPage({
         role="tablist"
         aria-label="Lọc tồn kho"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected
-          className="-mb-px border-b-2 border-[var(--accent)] px-1 pb-2 text-sm font-semibold whitespace-nowrap text-[var(--accent)]"
-        >
-          Tất cả ({allRows.length})
-        </button>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={filter === t.key}
+            onClick={() => handleFilterChange(t.key)}
+            className={`-mb-px border-b-2 px-1 pb-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+              filter === t.key
+                ? "border-[var(--accent)] text-[var(--accent)]"
+                : "border-transparent text-[var(--dim)] hover:text-[var(--text)]"
+            }`}
+          >
+            {t.label} ({t.count})
+          </button>
+        ))}
       </div>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -279,7 +211,7 @@ export function InventoryPage({
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Tìm biến thể theo tên xe, màu, SKU"
             aria-label="Tìm kiếm biến thể"
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--sidebar)] py-2.5 pr-3 pl-9 text-sm outline-none placeholder:text-[var(--dim)] focus:border-[var(--accent)] focus:bg-white"
@@ -289,7 +221,7 @@ export function InventoryPage({
           <span className="sr-only">Bộ lọc tồn kho</span>
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value as StockFilter)}
+            onChange={(e) => handleFilterChange(e.target.value as StockFilter)}
             aria-label="Bộ lọc tồn kho"
             className="rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)]"
           >
@@ -334,30 +266,39 @@ export function InventoryPage({
           Không tải được tồn kho: {error}
         </p>
       )}
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !error && paginatedRows.length === 0 && (
         <p className="mt-10 text-center text-sm text-[var(--dim)]">
           Không có biến thể nào khớp.
         </p>
       )}
 
-      {rows.length > 0 && (
-        <InventoryTable
-          rows={rows}
-          selected={selected}
-          allVisibleSelected={allVisibleSelected}
-          sortDir={sortDir}
-          setSortDir={setSortDir}
-          toggleSelectAll={(checked) =>
-            setSelected((s) =>
-              checked ? [...new Set([...s, ...visibleIds])] : s.filter((id) => !visibleIds.includes(id)),
-            )
-          }
-          toggleSelect={toggleSelect}
-          onOpenDetail={(id) => setDetailProductId(id)}
-          renderUpdateControls={renderUpdateControls}
-        />
+      {paginatedRows.length > 0 && (
+        <>
+          <InventoryTable
+            rows={paginatedRows}
+            selected={selected}
+            allVisibleSelected={allVisibleSelected}
+            sortDir={sortDir}
+            setSortDir={handleSortDirChange}
+            toggleSelectAll={(checked) =>
+              setSelected((s) =>
+                checked ? [...new Set([...s, ...visibleIds])] : s.filter((id) => !visibleIds.includes(id)),
+              )
+            }
+            toggleSelect={toggleSelect}
+            onOpenDetail={(id) => onOpenProduct(id)}
+            renderUpdateControls={renderUpdateControls}
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={PAGE_SIZE}
+            itemUnit="biến thể"
+            onPageChange={handlePageChange}
+          />
+        </>
       )}
     </div>
   );
 }
-

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { CatalogKind, CatalogData, CatalogEntry } from "../types";
 import { Icon, ICONS } from "../components/shared";
+import { Pagination } from "../components/Pagination";
 import {
   CATALOG_PAGE_CONFIG,
   CatalogEntryEditor,
@@ -26,6 +27,25 @@ export function CatalogPage({
   const [confirmDelete, setConfirmDelete] = useState<CatalogEntry | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeError, setNoticeError] = useState(false);
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [kind]);
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedEntries = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return entries.slice(start, start + PAGE_SIZE);
+  }, [entries, currentPage]);
 
   const deleteMut = useMutation({
     mutationFn: (e: CatalogEntry) =>
@@ -81,77 +101,91 @@ export function CatalogPage({
         </p>
       )}
       {!loading && !error && entries.length > 0 && (
-        <div className="mt-5 overflow-hidden rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)]">
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--table-head)] text-[var(--dim)]">
-                  <th className="px-4 py-3 font-medium">{cfg.nameLabel}</th>
-                  {(cfg.codeLabel || cfg.codeAuto) && (
-                    <th className="w-44 px-4 py-3 font-medium">Mã</th>
-                  )}
-                  <th className="w-44 px-4 py-3 font-medium">Sản phẩm đang dùng</th>
-                  <th className="w-44 px-4 py-3 font-medium">Bộ sưu tập đang dùng</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e) => (
-                  <tr
-                    key={e.id}
-                    onClick={() => setEditing(e)}
-                    className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--sidebar)]"
-                  >
-                    <td className="px-4 py-3 font-medium">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(e)}
-                        aria-label={`Sửa ${cfg.title.toLowerCase()} ${e.name}`}
-                        className="text-left font-medium"
-                      >
-                        {e.name}
-                      </button>
-                    </td>
+        <>
+          <div className="mt-5 overflow-hidden rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)]">
+            <div className="hidden md:block">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] bg-[var(--table-head)] text-[var(--dim)]">
+                    <th className="px-4 py-3 font-medium">{cfg.nameLabel}</th>
                     {(cfg.codeLabel || cfg.codeAuto) && (
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-[13px]">{e.code ?? "—"}</span>
-                      </td>
+                      <th className="w-44 px-4 py-3 font-medium">Mã</th>
                     )}
-                    <td className="px-4 py-3">{e.productCount} sản phẩm</td>
-                    <td className="px-4 py-3">{e.collectionCount} bộ sưu tập</td>
+                    <th className="w-44 px-4 py-3 font-medium">Sản phẩm đang dùng</th>
+                    <th className="w-44 px-4 py-3 font-medium">Bộ sưu tập đang dùng</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="divide-y divide-[var(--border)] md:hidden">
-            {entries.map((e) => (
-              <div
-                key={e.id}
-                onClick={() => setEditing(e)}
-                className="cursor-pointer px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(e)}
-                    aria-label={`Sửa ${cfg.title.toLowerCase()} ${e.name}`}
-                    className="text-left font-medium"
-                  >
-                    {e.name}
-                  </button>
-                  {(cfg.codeLabel || cfg.codeAuto) && (
-                    <span className="font-mono text-[13px] text-[var(--dim)]">
-                      {e.code ?? "—"}
-                    </span>
-                  )}
+                </thead>
+                <tbody>
+                  {paginatedEntries.map((e) => (
+                    <tr
+                      key={e.id}
+                      onClick={() => setEditing(e)}
+                      className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--sidebar)]"
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(e)}
+                          aria-label={`Sửa ${cfg.title.toLowerCase()} ${e.name}`}
+                          className="text-left font-medium"
+                        >
+                          {e.name}
+                        </button>
+                      </td>
+                      {(cfg.codeLabel || cfg.codeAuto) && (
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-[13px]">{e.code ?? "—"}</span>
+                        </td>
+                      )}
+                      <td className="px-4 py-3">{e.productCount} sản phẩm</td>
+                      <td className="px-4 py-3">{e.collectionCount} bộ sưu tập</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="divide-y divide-[var(--border)] md:hidden">
+              {paginatedEntries.map((e) => (
+                <div
+                  key={e.id}
+                  onClick={() => setEditing(e)}
+                  className="cursor-pointer px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(e)}
+                      aria-label={`Sửa ${cfg.title.toLowerCase()} ${e.name}`}
+                      className="text-left font-medium"
+                    >
+                      {e.name}
+                    </button>
+                    {(cfg.codeLabel || cfg.codeAuto) && (
+                      <span className="font-mono text-[13px] text-[var(--dim)]">
+                        {e.code ?? "—"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--dim)]">
+                    {e.productCount} sản phẩm · {e.collectionCount} bộ sưu tập đang dùng
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-[var(--dim)]">
-                  {e.productCount} sản phẩm · {e.collectionCount} bộ sưu tập đang dùng
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={entries.length}
+            pageSize={PAGE_SIZE}
+            itemUnit="mục"
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        </>
       )}
       <p className="mt-3 text-xs leading-5 text-[var(--dim)]">
         Bấm vào một dòng để mở hộp sửa — xóa mục ở trong hộp sửa. Không xóa được mục đang

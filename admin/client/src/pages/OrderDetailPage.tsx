@@ -3,8 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Order, Product } from "../types";
 import { fmtDate, fmtVND, orderCode, STATUS_LABEL } from "../utils/format";
-import { cardCls, smallBtn, Thumb } from "../components/shared";
+import { BackButton, smallBtn } from "../components/shared";
 import { deliveryChip, paymentChip } from "../components/OrderComponents";
+import { OrderItemsSection } from "../components/OrderItemsSection";
 import {
   OrderAddressSection,
   OrderCustomerSection,
@@ -119,13 +120,7 @@ export function OrderDetailPage({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1 rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--dim)] uppercase hover:text-[var(--text)]"
-      >
-        ‹ Đơn hàng
-      </button>
+      <BackButton label="Đơn hàng" onClick={onBack} />
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-bold tracking-tight">Đơn {orderCode(order.id)}</h1>
@@ -215,145 +210,23 @@ export function OrderDetailPage({
       <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Cột trái */}
         <div className="min-w-0 space-y-4">
-          <section className={cardCls} aria-label="Trạng thái giao hàng">
-            <div className="flex items-center gap-2 px-4 pt-4">
-              <span
-                aria-hidden
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
-                  order.status === "done"
-                    ? "bg-[#dcf2e3]"
-                    : order.status === "cancelled"
-                      ? "bg-[#e9f1f9]"
-                      : "bg-[#fdf0d3]"
-                }`}
-              >
-                ◌
-              </span>
-              <h2 className="font-semibold">
-                {deliveryLabel} ({totalQty})
-              </h2>
-            </div>
-            <div className="divide-y divide-[var(--border)] px-4">
-              {order.items.map((it) => {
-                const product = products.find((p) => p.id === it.productId);
-                return (
-                  <div key={it.id} className="flex items-center gap-3 py-3">
-                    {product ? (
-                      <Thumb product={product} size={48} />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[9px] font-semibold text-[var(--dim)]"
-                      >
-                        {it.scale}
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-[var(--accent)]">{it.productName}</p>
-                      <p className="text-sm text-[var(--dim)]">
-                        {it.colorName} · Tỉ lệ {it.scale}
-                      </p>
-                      <p className="font-mono text-xs text-[var(--dim)]">
-                        SKU: {it.variantSku ?? it.productSku ?? "—"}
-                      </p>
-                    </div>
-                    <p className="text-sm whitespace-nowrap">
-                      {fmtVND(it.unitPrice)} <span className="text-[var(--dim)]">× {it.quantity}</span>
-                    </p>
-                    <p className="w-24 text-right text-sm font-medium whitespace-nowrap">
-                      {fmtVND(it.unitPrice * it.quantity)}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
-              {order.status === "done" && (
-                <p className="text-sm text-[var(--dim)]">Đơn đã giao và hoàn thành.</p>
-              )}
-              {order.status === "cancelled" && (
-                <p className="text-sm text-[var(--dim)]">
-                  Đơn đã hủy — tồn kho đã cộng lại đúng màu.
-                </p>
-              )}
-              {(order.status === "new" || order.status === "confirmed") &&
-                (confirmCancel ? (
-                  <>
-                    <span className="text-sm text-[#9c2b2b]">
-                      Hủy đơn sẽ cộng lại tồn kho đúng màu đã trừ.
-                    </span>
-                    <button
-                      type="button"
-                      disabled={statusMut.isPending}
-                      onClick={() => statusMut.mutate("cancelled")}
-                      className="rounded-lg bg-[#c0392b] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                    >
-                      Chắc chắn hủy
-                    </button>
-                    <button
-                      type="button"
-                      disabled={statusMut.isPending}
-                      onClick={() => setConfirmCancel(false)}
-                      className={smallBtn}
-                    >
-                      Không hủy
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {order.status === "new" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setNotice(
-                              `Đơn ${orderCode(order.id)} đang được giữ ở trạng thái Mới — chưa xác nhận, hàng chưa trừ thêm và khách chưa bị tính là đã giao.`,
-                            )
-                          }
-                          className={smallBtn}
-                        >
-                          Giữ đơn
-                        </button>
-                        <button
-                          type="button"
-                          disabled={statusMut.isPending}
-                          onClick={() => statusMut.mutate("confirmed")}
-                          className="rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                        >
-                          Xác nhận đơn
-                        </button>
-                        <button
-                          type="button"
-                          disabled
-                          title="Xác nhận đơn trước rồi mới đánh dấu đã giao được"
-                          className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium opacity-50"
-                        >
-                          Đánh dấu đã giao
-                        </button>
-                      </>
-                    )}
-                    {order.status === "confirmed" && (
-                      <button
-                        type="button"
-                        disabled={statusMut.isPending}
-                        onClick={() => statusMut.mutate("done")}
-                        className="rounded-lg bg-[var(--accent)] transition-colors hover:bg-[var(--accent-dark)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        Đánh dấu đã giao
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={statusMut.isPending}
-                      onClick={() => setConfirmCancel(true)}
-                      className="rounded-lg border border-[#e3b3b3] px-3 py-1.5 text-sm text-[#9c2b2b] disabled:opacity-50"
-                    >
-                      Hủy đơn
-                    </button>
-                  </>
-                ))}
-            </div>
-          </section>
+          <OrderItemsSection
+            order={order}
+            products={products}
+            deliveryLabel={deliveryLabel}
+            totalQty={totalQty}
+            confirmCancel={confirmCancel}
+            setConfirmCancel={setConfirmCancel}
+            isStatusPending={statusMut.isPending}
+            onConfirmOrder={() => statusMut.mutate("confirmed")}
+            onMarkDone={() => statusMut.mutate("done")}
+            onCancelOrder={() => statusMut.mutate("cancelled")}
+            onHoldOrder={() =>
+              setNotice(
+                `Đơn ${orderCode(order.id)} đang được giữ ở trạng thái Mới — chưa xác nhận, hàng chưa trừ thêm và khách chưa bị tính là đã giao.`,
+              )
+            }
+          />
 
           <OrderPaymentSection order={order} totalQty={totalQty} />
         </div>
@@ -395,4 +268,3 @@ export function OrderDetailPage({
     </div>
   );
 }
-

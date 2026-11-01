@@ -1,7 +1,15 @@
 import { Chip, Icon, ICONS } from "./shared";
 
-export type ProductTab = "all" | "in" | "out";
-export type ProductSort = "default" | "nameAsc" | "nameDesc" | "priceDesc" | "priceAsc";
+export type ProductTab = "all" | "in" | "out" | "bestSelling";
+export type ProductSort =
+  | "default"
+  | "bestSelling"
+  | "bestRevenue"
+  | "salesAsc"
+  | "nameAsc"
+  | "nameDesc"
+  | "priceDesc"
+  | "priceAsc";
 
 export function ProductFilterBar({
   tabs,
@@ -20,7 +28,7 @@ export function ProductFilterBar({
   tabs: Array<[ProductTab, string]>;
   tab: ProductTab;
   onTabChange: (t: ProductTab) => void;
-  counts: { all: number; in: number; out: number };
+  counts: { all: number; in: number; out: number; bestSelling?: number };
   search: string;
   onSearchChange: (s: string) => void;
   sort: ProductSort;
@@ -44,13 +52,13 @@ export function ProductFilterBar({
             role="tab"
             aria-selected={tab === key}
             onClick={() => onTabChange(key)}
-            className={`-mb-px border-b-2 px-1 pb-2 text-sm whitespace-nowrap ${
+            className={`-mb-px border-b-2 px-1 pb-2 text-sm whitespace-nowrap transition-colors ${
               tab === key
                 ? "border-[var(--accent)] font-semibold text-[var(--accent)]"
                 : "border-transparent text-[var(--dim)] hover:text-[var(--text)]"
             }`}
           >
-            {label} ({counts[key]})
+            {label} ({counts[key] ?? 0})
           </button>
         ))}
       </div>
@@ -75,9 +83,12 @@ export function ProductFilterBar({
             value={sort}
             onChange={(e) => onSortChange(e.target.value as ProductSort)}
             aria-label="Sắp xếp sản phẩm"
-            className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)] sm:w-auto"
+            className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-[var(--accent)] sm:w-auto"
           >
             <option value="default">Mặc định</option>
+            <option value="bestSelling">Bán chạy nhất (Số lượng)</option>
+            <option value="bestRevenue">Bán chạy nhất (Doanh thu)</option>
+            <option value="salesAsc">Bán chậm nhất (Số lượng ít)</option>
             <option value="nameAsc">Tên A-Z</option>
             <option value="nameDesc">Tên Z-A</option>
             <option value="priceDesc">Giá cao-thấp</option>
@@ -111,11 +122,10 @@ export function ProductFilterBar({
             onClick={onClearExtraFilter}
             className="text-[var(--accent)] underline"
           >
-            Bỏ lọc theo bộ sưu tập
+            {extraFilter.kind === "brand" ? "Bỏ lọc theo hãng" : "Bỏ lọc theo loại xe"}
           </button>
         </p>
       )}
     </>
   );
 }
-

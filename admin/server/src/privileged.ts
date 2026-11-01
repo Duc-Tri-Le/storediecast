@@ -1,3 +1,7 @@
+import { listProductsPaginated } from "./ops/productPaginatedOps";
+import { listInventoryPaginated } from "./ops/inventoryPaginatedOps";
+import { listOrdersPaginated } from "./ops/orderPaginatedOps";
+import { listCollectionsPaginated } from "./ops/collectionPaginatedOps";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import {
@@ -80,6 +84,10 @@ export const privileged = definePrivilegedContracts({
         "listBulkUpdates",
         "applyBulkUpdate",
         "analytics",
+        "listProductsPaginated",
+        "listInventoryPaginated",
+        "listOrdersPaginated",
+        "listCollectionsPaginated",
       ]),
       paramsJson: z.string().default("{}"),
     }),
@@ -102,6 +110,15 @@ export function runOp(op: string, params: Row): unknown {
   try {
     db.exec("PRAGMA busy_timeout = 5000");
     switch (op) {
+      case "listProductsPaginated":
+        return listProductsPaginated(db, params as any);
+      case "listInventoryPaginated":
+        return listInventoryPaginated(db, params as any);
+      case "listOrdersPaginated":
+        return listOrdersPaginated(db, params as any);
+      case "listCollectionsPaginated":
+        return listCollectionsPaginated(db, params as any);
+
       case "overview":
         return overview(db);
       case "listProducts":

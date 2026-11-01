@@ -11,6 +11,7 @@ export const products = sqliteTable("products", {
   tiLe: text("ti_le").notNull().default(""),
   tags: text("tags").notNull().default(""),
   featured: integer("featured").notNull().default(0),
+  slug: text("slug").notNull().default(""),
   seoTitle: text("seo_title").notNull().default(""),
   seoDescription: text("seo_description").notNull().default(""),
   costPrice: integer("cost_price"),
@@ -54,6 +55,9 @@ export const orders = sqliteTable("orders", {
   total: integer("total").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+  confirmedAt: text("confirmed_at"),
+  doneAt: text("done_at"),
+  cancelledAt: text("cancelled_at"),
 });
 
 // ── Chi tiết dòng đơn dùng chung với Quản trị (bảng 'order_lines') ───
@@ -90,18 +94,37 @@ export const catalogEntries = sqliteTable("catalog_entries", {
   createdAt: text("created_at").notNull(),
 });
 
+export const catalogVehicleTypes = sqliteTable("catalog_vehicle_types", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+});
+
+export const catalogScales = sqliteTable("catalog_scales", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  code: text("code").notNull().default(""),
+});
+
+export const catalogCarBrands = sqliteTable("catalog_car_brands", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  code: text("code").notNull().default(""),
+});
+
 // ── Bộ sưu tập dùng chung với Quản trị (bảng 'collections') ─────────
 export const collections = sqliteTable("collections", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
-  mode: text("mode").notNull().default("auto"),
-  matchType: text("match_type").notNull().default("all"),
-  visible: integer("visible").notNull().default(1),
-  image: text("image").notNull().default(""),
+  status: text("status").notNull().default("published"),
+  kind: text("kind").notNull().default("auto"),
+  matchMode: text("match_mode").notNull().default("all"),
+  visibleOnList: integer("visible_on_list").notNull().default(1),
+  imageKey: text("image_key").notNull().default(""),
   isScale: integer("is_scale").notNull().default(0),
+  slug: text("slug").notNull().default(""),
   seoTitle: text("seo_title").notNull().default(""),
   seoDescription: text("seo_description").notNull().default(""),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
+  createdAt: integer("created_at"),
+  updatedAt: integer("updated_at"),
 });

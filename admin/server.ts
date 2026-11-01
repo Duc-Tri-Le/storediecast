@@ -102,7 +102,12 @@ if (typeof Bun !== "undefined") {
         const ext = extname(filePath).toLowerCase();
         const mime = MIME_TYPES[ext] || "application/octet-stream";
         return new Response(file, {
-          headers: { "Content-Type": mime },
+          headers: {
+            "Content-Type": mime,
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+          },
         });
       }
 
@@ -153,7 +158,12 @@ else {
     if (existsSync(target) && statSync(target).isFile()) {
       const ext = extname(target).toLowerCase();
       const mime = MIME_TYPES[ext] || "application/octet-stream";
-      res.writeHead(200, { "Content-Type": mime });
+      res.writeHead(200, {
+        "Content-Type": mime,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      });
       createReadStream(target).pipe(res);
     } else {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });

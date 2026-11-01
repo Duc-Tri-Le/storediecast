@@ -5,7 +5,7 @@ import { groupCatalog, productOut, vehicleTypeOf } from "./catalog";
 
 // ── Danh sách sản phẩm: LỌC + PHÂN TRANG Ở SERVER ───────────────────
 const listProductsRequest = z.object({
-  scale: z.enum(["all", "1:64", "1:32", "1:16"]).default("all"),
+  scale: z.string().default("all"),
   search: z.string().default(""),
   vehicleType: z.string().default("all"),
   brand: z.string().default("all"),
@@ -52,7 +52,19 @@ export const listProducts = defineAction({
       .where(where)
       .orderBy(asc(schema.products.tiLe), desc(schema.products.featured), asc(schema.products.id));
     if (args.vehicleType !== "all") {
-      rows = rows.filter((r: any) => vehicleTypeOf(r) === args.vehicleType);
+      let vt = args.vehicleType;
+      if (vt === "oto" || vt === "car") vt = "Ô tô";
+      else if (vt === "xemay" || vt === "moto") vt = "Xe máy";
+      else if (vt === "bantai" || vt === "pickup") vt = "Xe bán tải";
+      else if (vt === "maybay" || vt === "plane") vt = "Máy bay";
+      rows = rows.filter((r: any) => {
+        const rowType = vehicleTypeOf(r);
+        return (
+          rowType === vt ||
+          rowType === args.vehicleType ||
+          (r.loaiXe && r.loaiXe.trim().toLowerCase() === vt.trim().toLowerCase())
+        );
+      });
     }
     const ids = rows.map((r: any) => r.id);
     const allVariants = ids.length
@@ -94,15 +106,17 @@ export const listProducts = defineAction({
             Number(b.isFeatured) - Number(a.isFeatured) || a.name.localeCompare(b.name, "vi"),
         );
     }
+    const pageSize = args.pageSize || 200;
+    const pageNum = args.page || 1;
     const total = products.length;
-    const totalPages = Math.max(1, Math.ceil(total / args.pageSize));
-    const page = Math.min(args.page, totalPages);
-    const start = (page - 1) * args.pageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(pageNum, totalPages);
+    const start = (page - 1) * pageSize;
     return {
-      products: products.slice(start, start + args.pageSize),
+      products: products.slice(start, start + pageSize),
       total,
       page,
-      pageSize: args.pageSize,
+      pageSize,
       totalPages,
     };
   },

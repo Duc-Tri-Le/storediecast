@@ -2,12 +2,57 @@ import { defineAction, z } from "../space";
 import { privileged } from "../privileged";
 import {
   adminProductOut,
+  adminProductsPaginatedOut,
+  adminInventoryPaginatedOut,
   okErrorOut,
   productInput,
 } from "../schemas/productSchemas";
 import { callShop } from "../schemas/analyticsSchemas";
 
 export const productActions = {
+  adminListProductsPaginated: defineAction({
+    request: z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(200).default(50),
+      tab: z.enum(["all", "in", "out", "bestSelling"]).default("all"),
+      scale: z.string().nullable().default(null),
+      brand: z.string().nullable().default(null),
+      vehicleType: z.string().nullable().default(null),
+      search: z.string().default(""),
+      sort: z
+        .enum([
+          "default",
+          "nameAsc",
+          "nameDesc",
+          "priceAsc",
+          "priceDesc",
+          "bestSelling",
+          "bestRevenue",
+          "salesAsc",
+        ])
+        .default("default"),
+    }),
+    response: adminProductsPaginatedOut,
+    privileged: [privileged.shopDb],
+    async handler(ctx, args) {
+      return callShop(ctx, "listProductsPaginated", args);
+    },
+  }),
+
+  adminListInventoryPaginated: defineAction({
+    request: z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(200).default(50),
+      filter: z.enum(["all", "in", "low", "out"]).default("all"),
+      search: z.string().default(""),
+      sortDir: z.enum(["asc", "desc"]).default("asc"),
+    }),
+    response: adminInventoryPaginatedOut,
+    privileged: [privileged.shopDb],
+    async handler(ctx, args) {
+      return callShop(ctx, "listInventoryPaginated", args);
+    },
+  }),
   adminListProducts: defineAction({
     request: z.object({}),
     response: z.object({ products: z.array(adminProductOut) }),

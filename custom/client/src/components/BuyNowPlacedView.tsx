@@ -1,3 +1,4 @@
+import { orderCode } from "../utils/format";
 import { fmt } from "../services/pricing";
 
 export type PlacedOrderInfo = {
@@ -30,7 +31,7 @@ export function BuyNowPlacedView({
     <div className="px-5 py-6">
       <div className="rounded-2xl bg-[var(--surface2)] p-5 text-center">
         <p className="text-4xl" aria-hidden>✓</p>
-        <p className="mt-2 font-bold">Đơn #{placed.id} đã được ghi nhận</p>
+        <p className="mt-2 font-bold">Đơn {orderCode(placed.id)} đã được ghi nhận</p>
         <p className="mt-1 text-sm text-[var(--dim)]">
           {cleanName} · Màu {colorName} × {qty}
         </p>

@@ -4,12 +4,26 @@ import { okErrorOut } from "../schemas/productSchemas";
 import {
   collectionConditionIn,
   collectionOut,
-  collectionWriteOut,
+  adminCollectionsPaginatedOut,
   thumbnailConfigIn,
 } from "../schemas/catalogSchemas";
 import { callShop } from "../schemas/analyticsSchemas";
 
 export const collectionActions = {
+  adminListCollectionsPaginated: defineAction({
+    request: z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(200).default(50),
+      tab: z.enum(["all", "manual", "auto"]).default("all"),
+      search: z.string().default(""),
+      sort: z.enum(["default", "titleAsc", "titleDesc", "newest"]).default("default"),
+    }),
+    response: adminCollectionsPaginatedOut,
+    privileged: [privileged.shopDb],
+    async handler(ctx, args) {
+      return callShop(ctx, "listCollectionsPaginated", args);
+    },
+  }),
   adminListCollections: defineAction({
     request: z.object({}),
     response: z.object({ collections: z.array(collectionOut) }),
@@ -33,14 +47,28 @@ export const collectionActions = {
       thumbnailConfig: thumbnailConfigIn.optional(),
       seoTitle: z.string().max(200).optional(),
       seoDescription: z.string().max(1000).optional(),
+      slug: z.string().max(200).optional(),
+      force: z.boolean().optional(),
     }),
-    response: collectionWriteOut,
+    response: z.object({
+      ok: z.boolean(),
+      error: z.string().nullable(),
+      collectionId: z.number().nullable(),
+      duplicateWarning: z.boolean().optional(),
+      duplicateTitle: z.string().optional(),
+      scale: z.string().optional(),
+      kindLabel: z.string().optional(),
+    }),
     privileged: [privileged.shopDb],
     async handler(ctx, args) {
       const res = await callShop<{
         ok: boolean;
         error: string | null;
         collectionId: number | null;
+        duplicateWarning?: boolean;
+        duplicateTitle?: string;
+        scale?: string;
+        kindLabel?: string;
       }>(ctx, "createCollection", args);
       if (res.ok) ctx?.invalidateQueries?.();
       return res;
@@ -61,11 +89,25 @@ export const collectionActions = {
       thumbnailConfig: thumbnailConfigIn.optional(),
       seoTitle: z.string().max(200).optional(),
       seoDescription: z.string().max(1000).optional(),
+      slug: z.string().max(200).optional(),
+      force: z.boolean().optional(),
     }),
-    response: okErrorOut,
+    response: z.object({
+      ok: z.boolean(),
+      error: z.string().nullable(),
+      duplicateWarning: z.boolean().optional(),
+      duplicateTitle: z.string().optional(),
+      scale: z.string().optional(),
+    }),
     privileged: [privileged.shopDb],
     async handler(ctx, args) {
-      const res = await callShop<{ ok: boolean; error: string | null }>(
+      const res = await callShop<{
+        ok: boolean;
+        error: string | null;
+        duplicateWarning?: boolean;
+        duplicateTitle?: string;
+        scale?: string;
+      }>(
         ctx,
         "updateCollection",
         args,

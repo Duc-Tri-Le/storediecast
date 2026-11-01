@@ -1,19 +1,3 @@
-import type { ScaleFilter, VehicleFilter } from "../types";
-
-export const SCALES: Array<{ key: ScaleFilter; label: string; hint: string }> = [
-  { key: "all", label: "Tất cả", hint: "Đủ loại xe · đủ màu" },
-  { key: "1:64", label: "1:64", hint: "Bỏ túi · sealed" },
-  { key: "1:32", label: "1:32", hint: "Mở cửa · vừa tay" },
-  { key: "1:16", label: "1:16", hint: "Cỡ lớn · sưu tầm" },
-];
-
-export const VEHICLES: Array<{ key: VehicleFilter; label: string }> = [
-  { key: "all", label: "Tất cả loại xe" },
-  { key: "Ô tô", label: "Ô tô" },
-  { key: "Xe máy", label: "Xe máy" },
-  { key: "Xe bán tải", label: "Xe bán tải" },
-];
-
 export type SortKey = "featured" | "az" | "za" | "priceAsc" | "priceDesc";
 
 export const SORTS: Array<{ key: SortKey; label: string }> = [
@@ -39,7 +23,7 @@ export const PRICE_RANGES: Array<{
   max: number | null;
   test: (price: number) => boolean;
 }> = [
-  { key: "all", label: "Tất cả khoảng tiền", min: null, max: null, test: () => true },
+  { key: "all", label: "Tất cả", min: null, max: null, test: () => true },
   { key: "under100", label: "Dưới 100k", min: null, max: 100_000, test: (p) => p < 100_000 },
   {
     key: "from100to300",
@@ -66,4 +50,5 @@ export const PRICE_RANGES: Array<{
 ];
 
 export type SideSectionKey = "scale" | "brand" | "vehicle" | "price" | "hot" | "sale";
+
 

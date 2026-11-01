@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { CatalogData, Product } from "../types";
 import type {
@@ -9,34 +9,50 @@ import type {
 import {
   productMatchesConditions,
 } from "../utils/collectionRules";
-import { fmtDate } from "../utils/format";
-import { Icon, ICONS, smallBtn } from "../components/shared";
+import { BackButton } from "../components/shared";
 import type { BulkActionDraft } from "../components/BulkUpdateForms";
-import {
-  bulkActionLine,
-  BulkUpdatePreviewModal,
-} from "../components/BulkUpdateForms";
+import { BulkUpdatePreviewModal } from "../components/BulkUpdateForms";
 import { BulkUpdateCreatorForm } from "../components/BulkUpdateCreator";
+import { BulkUpdateHistoryList } from "../components/BulkUpdateHistoryList";
 
 export function BulkUpdatePage({
   products,
   loading,
   error,
+  catalog: _catalog,
+  routeIsNew = false,
+  onNavigateCreating,
 }: {
   products: Product[];
   loading: boolean;
   error: string | null;
   catalog: CatalogData | null;
+  routeIsNew?: boolean;
+  onNavigateCreating?: (creating: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [view, setView] = useState<"list" | "create">("list");
+  const [view, setView] = useState<"list" | "create">(() => (routeIsNew ? "create" : "list"));
+
+  const handleSetView = (v: "list" | "create") => {
+    setView(v);
+    onNavigateCreating?.(v === "create");
+  };
+
   const [notice, setNotice] = useState<string | null>(null);
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const updatesQuery = useQuery({
     queryKey: ["admin-bulk-updates"],
     queryFn: () => api.adminListBulkUpdates({}),
   });
-  const updates = updatesQuery.data?.updates ?? [];
+  const updates = (updatesQuery.data?.updates ?? []) as any[];
+  const totalPages = Math.max(1, Math.ceil(updates.length / PAGE_SIZE));
+
+  const paginatedUpdates = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return updates.slice(start, start + PAGE_SIZE);
+  }, [updates, currentPage, PAGE_SIZE]);
 
   const [matchMode, setMatchMode] = useState<MatchMode>("all");
   const [conditions, setConditions] = useState<CollectionCondition[]>([
@@ -78,39 +94,37 @@ export function BulkUpdatePage({
   }, [matchedProducts, variantMustMatch, validConditions, matchMode]);
 
   const createMut = useMutation({
-    mutationFn: () => {
-      const actions = bulkActions.map((a) => {
-        const val =
-          a.mode === "clear"
-            ? null
-            : a.type === "description"
-              ? null
-              : Number(a.value.replace(/[^\d.-]/g, "") || "0");
-        return {
-          type: a.type,
-          mode: a.mode,
-          value: val,
-          text: a.type === "description" ? a.text : undefined,
-        };
-      });
-      return api.adminApplyBulkUpdate({
-        conditions: validConditions,
+    mutationFn: () =>
+      api.adminApplyBulkUpdate({
         matchMode,
+        conditions: validConditions,
         variantMustMatch,
-        actions,
-      });
-    },
+        actions: bulkActions.map((a) => {
+          const numVal =
+            a.mode === "clear"
+              ? null
+              : a.type === "description"
+                ? null
+                : Number(a.value);
+          return {
+            type: a.type,
+            mode: a.mode,
+            value: Number.isFinite(numVal) ? numVal : null,
+            text: a.type === "description" ? a.text : undefined,
+          };
+        }),
+      }),
     onSuccess: (res) => {
       if (!res.ok) {
-        setFormError(res.error ?? "Không thực hiện được cập nhật.");
+        setFormError(res.error ?? "Không áp dụng được cập nhật hàng loạt.");
         return;
       }
-      queryClient.invalidateQueries();
-      setView("list");
-      setFormError(null);
+      setShowPreview(false);
+      handleSetView("list");
       setNotice(
-        `Đã cập nhật ${res.updatedProducts} sản phẩm (${res.updatedVariants} biến thể) vào database chung.`,
+        `Đã cập nhật thành công ${res.updatedProducts} sản phẩm (${res.updatedVariants} biến thể) vào database chung.`,
       );
+      void queryClient.invalidateQueries();
     },
     onError: (e) => setFormError(e instanceof Error ? e.message : String(e)),
   });
@@ -118,86 +132,72 @@ export function BulkUpdatePage({
   const submit = () => {
     setFormError(null);
     if (validConditions.length === 0) {
-      return setFormError("Cần ít nhất một điều kiện có giá trị.");
+      setFormError("Vui lòng thêm ít nhất một điều kiện lọc có giá trị.");
+      return;
     }
     if (matchedProducts.length === 0) {
-      return setFormError("Không có sản phẩm nào khớp điều kiện để cập nhật.");
+      setFormError("Không có sản phẩm nào khớp với điều kiện lọc hiện tại.");
+      return;
     }
     for (let i = 0; i < bulkActions.length; i++) {
-      const a = bulkActions[i];
-      if (!a) continue;
+      const a = bulkActions[i]!;
       if (a.type === "description") {
         if (!a.text.trim()) {
-          return setFormError(`Hành động ${i + 1} (mô tả): chưa nhập nội dung mô tả.`);
+          setFormError(`Hành động #${i + 1}: Vui lòng nhập nội dung mô tả mới.`);
+          return;
         }
       } else if (a.mode !== "clear") {
-        const n = Number(a.value.replace(/[^\d.-]/g, ""));
-        if (!a.value.trim() || isNaN(n) || n <= 0) {
-          return setFormError(
-            `Hành động ${i + 1}: giá trị phải là số lớn hơn 0 (ví dụ 10% hoặc 450000₫).`,
-          );
+        const n = Number(a.value);
+        if (!a.value.trim() || Number.isNaN(n) || n < 0) {
+          setFormError(`Hành động #${i + 1}: Vui lòng nhập số hợp lệ ≥ 0.`);
+          return;
         }
       }
     }
-    createMut.mutate();
+    setShowPreview(true);
   };
 
   if (view === "create") {
     return (
-      <div>
-        <button
-          type="button"
-          onClick={() => setView("list")}
-          aria-label="Quay lại Cập nhật hàng loạt"
-          className="inline-flex items-center gap-1 rounded-md bg-[var(--sidebar)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--dim)] uppercase hover:text-[var(--text)]"
-        >
-          ‹ Cập nhật hàng loạt
-        </button>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="mr-auto text-2xl font-bold tracking-tight">Tạo bản cập nhật</h1>
-          <button
-            type="button"
-            onClick={() => setShowPreview(true)}
-            className={`${smallBtn} inline-flex items-center gap-1.5`}
-          >
-            <Icon
-              d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"
-              size={16}
-            />
-            Xem trước
-          </button>
+      <div className="mx-auto max-w-4xl pb-12">
+        <div className="mb-6">
+          <BackButton label="Danh sách cập nhật" onClick={() => handleSetView("list")} />
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text)] sm:text-3xl">
+            Tạo bản cập nhật hàng loạt
+          </h1>
+          <p className="mt-1 text-sm text-[var(--dim)]">
+            Thiết lập điều kiện lọc và các hành động cần thay đổi cùng lúc trên nhiều sản phẩm
+          </p>
         </div>
 
         {formError && (
-          <p className="mt-4 rounded-lg bg-[#fbe3e3] px-4 py-3 text-sm text-[#9c2b2b]">
-            {formError}
-          </p>
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-[#e3b3b3] bg-[#fdf3f3] p-4 text-sm text-[#9c2b2b]">
+            <span className="text-base">⚠️</span>
+            <p className="font-medium">{formError}</p>
+          </div>
         )}
 
-        <div className="mt-4">
-          <BulkUpdateCreatorForm
-            matchMode={matchMode}
-            setMatchMode={setMatchMode}
-            conditions={conditions}
-            setConditions={setConditions}
-            variantMustMatch={variantMustMatch}
-            setVariantMustMatch={setVariantMustMatch}
-            validConditions={validConditions}
-            matchedProducts={matchedProducts}
-            matchedVariantCount={matchedVariantCount}
-            bulkActions={bulkActions}
-            setBulkActions={setBulkActions}
-            onCancel={() => setView("list")}
-            onSubmit={submit}
-            isPending={createMut.isPending}
-          />
-        </div>
+        <BulkUpdateCreatorForm
+          matchMode={matchMode}
+          setMatchMode={setMatchMode}
+          conditions={conditions}
+          setConditions={setConditions}
+          variantMustMatch={variantMustMatch}
+          setVariantMustMatch={setVariantMustMatch}
+          validConditions={validConditions}
+          matchedProducts={matchedProducts}
+          matchedVariantCount={matchedVariantCount}
+          bulkActions={bulkActions}
+          setBulkActions={setBulkActions}
+          onCancel={() => handleSetView("list")}
+          onSubmit={submit}
+          isPending={createMut.isPending}
+        />
 
         {showPreview && (
           <BulkUpdatePreviewModal
-            validConditions={validConditions}
             matchMode={matchMode}
+            validConditions={validConditions}
             variantMustMatch={variantMustMatch}
             bulkActions={bulkActions}
             matchedProducts={matchedProducts}
@@ -212,79 +212,18 @@ export function BulkUpdatePage({
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-bold tracking-tight">Cập nhật hàng loạt</h1>
-        <button
-          type="button"
-          onClick={() => setView("create")}
-          className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-dark)]"
-        >
-          <Icon d={ICONS.plus} size={15} /> Tạo bản cập nhật
-        </button>
-      </div>
-      <p className="mt-1 text-sm text-[var(--dim)]">
-        Đổi giá, khuyến mãi, tồn kho hoặc mô tả cho nhiều sản phẩm cùng lúc theo điều kiện.
-      </p>
-
-      {notice && (
-        <p className="mt-4 rounded-lg bg-[var(--accent-soft)] px-4 py-3 text-sm">{notice}</p>
-      )}
-      {loading && <p className="mt-6 text-sm text-[var(--dim)]">Đang tải…</p>}
-      {error && (
-        <p className="mt-6 rounded-lg bg-[#fbe3e3] px-4 py-3 text-sm text-[#9c2b2b]">
-          {error}
-        </p>
-      )}
-
-      {!loading && !error && updates.length === 0 && (
-        <div className="mt-8 rounded-xl border border-[var(--border)] p-8 text-center shadow-[var(--shadow-card)]">
-          <p className="text-sm text-[var(--dim)]">Chưa có bản cập nhật hàng loạt nào.</p>
-          <button
-            type="button"
-            onClick={() => setView("create")}
-            className="mt-3 rounded-lg bg-[var(--accent)] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-dark)]"
-          >
-            Tạo bản cập nhật đầu tiên
-          </button>
-        </div>
-      )}
-
-      {updates.length > 0 && (
-        <div className="mt-5 space-y-3">
-          {updates.map((u) => (
-            <div
-              key={u.id}
-              className="rounded-xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-card)]"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">Cập nhật #{u.id}</p>
-                  <p className="text-xs text-[var(--dim)]">{fmtDate(u.createdAt)}</p>
-                </div>
-                <span className="rounded bg-[var(--sidebar)] px-2.5 py-1 text-xs font-medium">
-                  {u.updatedProducts} sản phẩm · {u.updatedVariants} biến thể
-                </span>
-              </div>
-              <div className="mt-3 text-xs text-[var(--dim)]">
-                <p>
-                  Hành động:{" "}
-                  {u.actions
-                    .map((a) =>
-                      bulkActionLine({
-                        type: a.type,
-                        mode: a.mode,
-                        value: a.value,
-                        text: a.text,
-                      }),
-                    )
-                    .join("; ")}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <BulkUpdateHistoryList
+      updates={updates}
+      paginatedUpdates={paginatedUpdates}
+      loading={loading}
+      error={error}
+      notice={notice}
+      setNotice={setNotice}
+      onGoCreate={() => handleSetView("create")}
+      currentPage={currentPage}
+      totalPages={totalPages}
+      pageSize={PAGE_SIZE}
+      onPageChange={setCurrentPage}
+    />
   );
 }
